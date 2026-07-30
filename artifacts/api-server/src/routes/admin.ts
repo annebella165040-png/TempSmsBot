@@ -11,7 +11,7 @@ router.get("/admin", (_req, res) => {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>TBH VIP Bot — Admin Panel</title>
+<title>AnneBella Sms Panel — Admin Panel</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;padding:20px}
@@ -46,7 +46,7 @@ router.get("/admin", (_req, res) => {
 </style>
 </head>
 <body>
-<h1>⚙️ TBH VIP Bot — Admin Panel</h1>
+<h1>⚙️ AnneBella Sms Panel — Admin Panel</h1>
 <p class="sub">Firebase Panel Manager · Bot API Dashboard</p>
 
 <!-- Add Panel -->

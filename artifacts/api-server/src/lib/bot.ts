@@ -5,13 +5,13 @@ import { fetchPanelDevices, fetchDeviceSms } from "./firebase";
 import { logger } from "./logger";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-const BOT_USERNAME = process.env.BOT_USERNAME || "TBH_VIP_BOT";
+const BOT_USERNAME = process.env.BOT_USERNAME || "AnneBella_Sms_Panel_Bot";
 
 // Required channels to join
 const REQUIRED_CHANNELS = [
-  { username: "TBH_BRAND", label: "TBH OFFICIAL" },
-  { username: "TBH_X_EARNING", label: "TBH X EARNING" },
-  { username: "TBH_OFFICAL_CHAT", label: "TBH OFFICIAL CHAT" },
+  { username: "AnneBella_Network", label: "AnneBella Network" },
+  { username: "AnneBella_Update", label: "Panel Update" },
+  { username: "AnneBella_Support", label: "Support Group" },
 ];
 
 let bot: TelegramBot | null = null;
@@ -349,9 +349,9 @@ function setupHandlers(bot: TelegramBot) {
         // Welcome message with premium emoji
         await send(
           chatId,
-          `${em(E.lightning, "⚡")} <b>TBH VIP BOT</b> ${em(E.lightning, "⚡")}\n` +
+          `${em(E.lightning, "⚡")} <b>AnneBella Sms Panel</b> ${em(E.lightning, "⚡")}\n` +
           `${divider()}\n\n` +
-          `${em(E.sparkle, "✨")} <b>WELCOME TO TBH VIP BOT!</b>\n\n` +
+          `${em(E.sparkle, "✨")} <b>WELCOME TO AnneBella Sms Panel!</b>\n\n` +
           `${em(E.lightning, "⚡")} <b>AAPKO 1 GHANTE KE LIYE GET NUMBER FREE MILA!</b>\n` +
           `KOI LIMIT NAHI — 1HR TAK FULL ACCESS.\n\n` +
           `${em(E.expire, "⌛")} 1HR KE BAAD GET NUMBER LOCK HO JAYEGA.\n` +
@@ -371,7 +371,7 @@ function setupHandlers(bot: TelegramBot) {
           chatId,
           `${em(E.lock, "🔒")} <b>CHANNEL VERIFICATION REQUIRED</b>\n` +
           `${divider()}\n\n` +
-          `TBH VIP BOT KA FULL ACCESS PANE KE LIYE\n` +
+          `AnneBella Sms Panel KA FULL ACCESS PANE KE LIYE\n` +
           `NICHE DIYE GAYE SABHI OFFICIAL CHANNELS JOIN KARO.\n\n` +
           `${em(E.check, "✅")} CHANNELS JOIN KARNE KE BAAD <b>I JOINED — CHECK NOW</b> BUTTON DABAO.`,
           {
@@ -859,7 +859,7 @@ function setupHandlers(bot: TelegramBot) {
           `${em(E.support, "🖥")} <b>SUPPORT ( DEVELOPER )</b>\n` +
           `${divider()}\n\n` +
           `${em(E.sparkle, "✨")} Kisi bhi issue ke liye developer se contact karo:\n\n` +
-          `${em(E.link, "🔗")} @TBH_BRAND`,
+          `${em(E.link, "🔗")} @AnneBella_Network`,
           { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
         return;
@@ -1023,7 +1023,7 @@ function setupHandlers(bot: TelegramBot) {
           user = newUser;
         }
 
-        await bot.answerCallbackQuery(query.id, { text: "✅ Verified! Welcome to TBH VIP Bot." });
+        await bot.answerCallbackQuery(query.id, { text: "✅ Verified! Welcome to AnneBella Sms Panel." });
 
         // Show inline verified message then send main menu
         await send(
@@ -1062,7 +1062,7 @@ function setupHandlers(bot: TelegramBot) {
           `${em(E.credits, "💎")} <b>Package:</b> ${pkg.credits} Credits\n` +
           `${em(E.money, "💰")} <b>Amount:</b> ₹${pkg.price}\n\n` +
           `${em(E.warn, "⚠️")} UPI QR screenshot developer ko bhejo after payment:\n` +
-          `${em(E.link, "🔗")} @TBH_BRAND`,
+          `${em(E.link, "🔗")} @AnneBella_Network`,
           { parse_mode: "HTML" }
         );
         return;
