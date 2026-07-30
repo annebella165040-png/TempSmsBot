@@ -3,20 +3,29 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: TBH VIP Telegram Bot + Admin Panel API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: panels
+    description: Firebase panel management
+  - name: dashboard
+    description: Aggregated stats
+  - name: users
+    description: Bot user management
+  - name: gift-cards
+    description: Gift card management
+  - name: bot
+    description: Bot webhook
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +33,217 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /panels:
+    get:
+      operationId: listPanels
+      tags: [panels]
+      summary: List all Firebase panels
+      responses:
+        "200":
+          description: List of panels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Panel"
+    post:
+      operationId: createPanel
+      tags: [panels]
+      summary: Add a new Firebase panel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PanelInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Panel"
+
+  /panels/{id}:
+    delete:
+      operationId: deletePanel
+      tags: [panels]
+      summary: Remove a Firebase panel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /panels/{id}/devices:
+    get:
+      operationId: getPanelDevices
+      tags: [panels]
+      summary: Fetch live devices from a Firebase panel
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Devices list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Device"
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Aggregate stats across all panels
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all bot users
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BotUser"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a bot user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotUser"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a bot user (credits, access expiry)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotUser"
+
+  /gift-cards:
+    get:
+      operationId: listGiftCards
+      tags: [gift-cards]
+      summary: List all gift cards
+      responses:
+        "200":
+          description: List of gift cards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GiftCard"
+    post:
+      operationId: createGiftCard
+      tags: [gift-cards]
+      summary: Create a new gift card
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GiftCardInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GiftCard"
+
+  /gift-cards/{id}:
+    delete:
+      operationId: deleteGiftCard
+      tags: [gift-cards]
+      summary: Delete a gift card
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted
+
+  /bot/webhook:
+    post:
+      operationId: botWebhook
+      tags: [bot]
+      summary: Telegram bot webhook endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramUpdate"
+      responses:
+        "200":
+          description: OK
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +254,172 @@ components:
       required:
         - status
 
+    Panel:
+      type: object
+      required: [id, name, firebaseUrl, createdAt]
+      properties:
+        id:
+          type: number
+        name:
+          type: string
+        firebaseUrl:
+          type: string
+        createdAt:
+          type: string
+
+    PanelInput:
+      type: object
+      required: [name, firebaseUrl, secretKey]
+      properties:
+        name:
+          type: string
+        firebaseUrl:
+          type: string
+        secretKey:
+          type: string
+
+    Device:
+      type: object
+      required: [id, name, status, phoneNumber, battery]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: boolean
+        phoneNumber:
+          type: string
+        battery:
+          type: string
+        model:
+          type: string
+        lastSeen:
+          type: ["string", "null"]
+        simCount:
+          type: number
+        totalSms:
+          type: number
+        panelId:
+          type: number
+        panelName:
+          type: string
+
+    DashboardStats:
+      type: object
+      required: [totalPanels, totalDevices, onlineDevices, offlineDevices, totalUsers, activeUsers, totalGiftCards, usedGiftCards]
+      properties:
+        totalPanels:
+          type: number
+        totalDevices:
+          type: number
+        onlineDevices:
+          type: number
+        offlineDevices:
+          type: number
+        totalUsers:
+          type: number
+        activeUsers:
+          type: number
+        totalGiftCards:
+          type: number
+        usedGiftCards:
+          type: number
+        panelBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/PanelStat"
+
+    PanelStat:
+      type: object
+      required: [panelId, panelName, online, offline, total]
+      properties:
+        panelId:
+          type: number
+        panelName:
+          type: string
+        online:
+          type: number
+        offline:
+          type: number
+        total:
+          type: number
+
+    BotUser:
+      type: object
+      required: [id, telegramId, firstName, referralCode, referralCount, smsCredits, createdAt]
+      properties:
+        id:
+          type: number
+        telegramId:
+          type: string
+        username:
+          type: ["string", "null"]
+        firstName:
+          type: string
+        referralCode:
+          type: string
+        referredBy:
+          type: ["string", "null"]
+        referralCount:
+          type: number
+        smsCredits:
+          type: number
+        getNumberExpiresAt:
+          type: ["string", "null"]
+        sendSmsUnlocked:
+          type: boolean
+        webPanelExpiresAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    UserUpdate:
+      type: object
+      properties:
+        smsCredits:
+          type: number
+        getNumberExpiresAt:
+          type: ["string", "null"]
+        sendSmsUnlocked:
+          type: boolean
+        webPanelExpiresAt:
+          type: ["string", "null"]
+
+    GiftCard:
+      type: object
+      required: [id, code, type, value, createdAt]
+      properties:
+        id:
+          type: number
+        code:
+          type: string
+        type:
+          type: string
+          enum: [hours, credits]
+        value:
+          type: number
+        usedBy:
+          type: ["string", "null"]
+        usedAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    GiftCardInput:
+      type: object
+      required: [code, type, value]
+      properties:
+        code:
+          type: string
+        type:
+          type: string
+          enum: [hours, credits]
+        value:
+          type: number
+
+    TelegramUpdate:
+      type: object
+      properties:
+        update_id:
+          type: number
