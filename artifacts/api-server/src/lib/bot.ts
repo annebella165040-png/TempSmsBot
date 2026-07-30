@@ -49,7 +49,12 @@ const E = {
   sparkle:      "5289722755871162900",   // ✨
   rocket:       "5372917041193828849",   // 🚀
   search:       "5368309348739074032",   // 🔎
-  signal:       "5352759161945867747",   // 📶
+  signal:       "5352759161945867747",   // (back arrow — used for BACK button)
+  a1:           "5445033158456145975",   // new #1
+  a2:           "5104966345267610825",   // new #2
+  a3:           "4918014360267260850",   // new #3
+  a4:           "4915842446845281363",   // new #4
+  a5:           "4916086774649848789",   // new #5
   globe:        "5372849966689566579",   // 🌐
   profile:      "5206318837489743801",   // 👤
   gift:         "5359664288241829619",   // 🎁
@@ -149,6 +154,11 @@ const E_FB: Record<string, string> = {
   "5235588635885054955": "🗄️",
   "5258500422393415126": "💬",
   "5301096984617166561": "🔄",
+  "5445033158456145975": "✦",
+  "5104966345267610825": "✦",
+  "4918014360267260850": "✦",
+  "4915842446845281363": "✦",
+  "4916086774649848789": "✦",
 };
 
 // Premium emoji tag for HTML parse mode.
@@ -215,25 +225,25 @@ function mainMenuKeyboard(): CKeyboard {
     keyboard: [
       [
         btn("GET NUMBER",            "success", E.phone),      // 📱
-        btn("WEB PANEL",             "primary", E.globe),      // 🌐
+        btn("WEB PANEL",             "primary", E.sparkle),   // new #6 ✨
       ],
       [
-        btn("SUPPORT ( DEVELOPER )", "danger",  E.support),    // 🖥
+        btn("SUPPORT ( DEVELOPER )", "danger",  E.support),   // 🖥
       ],
       [
-        btn("SEARCH NUMBER",         "primary", E.search),     // 🔎
-        btn("BUY CREDIT",            "success", E.buy),        // 💳
+        btn("SEARCH NUMBER",         "primary", E.search),    // 🔎
+        btn("BUY CREDIT",            "success", E.buy),       // 💳
       ],
       [
-        btn("STATUS",                "primary", E.signal),     // 📶
-        btn("PROFILE",               "primary", E.profile),    // 👤
+        btn("STATUS",                "primary", E.a1),        // new #1
+        btn("PROFILE",               "primary", E.profile),   // 👤
       ],
       [
-        btn("GIFT CARD",             "success", E.gift),       // 🎁
-        btn("REFER & EARN",          "success", E.referral),   // 👥
+        btn("GIFT CARD",             "success", E.a5),        // new #5
+        btn("REFER & EARN",          "success", E.referral),  // 👥
       ],
       [
-        btn("BACK",                  "danger",  E.back),       // ↩️
+        btn("BACK",                  "danger",  E.signal),    // user's back ID
       ],
     ],
     resize_keyboard: true,
@@ -245,7 +255,7 @@ function numberMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        btn("NEW NUMBER",      "success", E.refresh),    // 🔄
+        btn("NEW NUMBER",      "success", E.a2),         // new #2
         btn("WATCH SMS",       "success", E.eye),        // 👁
       ],
       [
@@ -253,11 +263,11 @@ function numberMenuKeyboard(): CKeyboard {
         btn("STOP WATCH",      "danger",  E.stop),       // 🛑
       ],
       [
-        btn("SEND SMS",        "primary", E.sms),        // 💬
-        btn("NUMBERS HISTORY", "primary", E.phone),      // 📱
+        btn("SEND SMS",        "primary", E.a3),         // new #3
+        btn("NUMBERS HISTORY", "primary", E.a4),         // new #4
       ],
       [
-        btn("BACK",            "danger",  E.back),       // ↩️
+        btn("BACK",            "danger",  E.signal),     // user's back ID
       ],
     ],
     resize_keyboard: true,
@@ -269,11 +279,11 @@ function watchMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        btn("STOP WATCH",  "danger",  E.stop),      // 🛑
-        btn("SMS HISTORY", "primary", E.history),  // 📋
+        btn("STOP WATCH",  "danger",  E.stop),     // 🛑
+        btn("SMS HISTORY", "primary", E.history), // 📋
       ],
       [
-        btn("BACK",        "danger",  E.back),     // ↩️
+        btn("BACK",        "danger",  E.signal),  // user's back ID
       ],
     ],
     resize_keyboard: true,
