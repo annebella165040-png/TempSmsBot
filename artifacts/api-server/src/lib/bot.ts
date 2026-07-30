@@ -203,35 +203,34 @@ type CKeyboard = { keyboard: KRow[]; resize_keyboard: boolean; is_persistent?: b
 function btn(
   text: string,
   style: "success" | "danger" | "primary",
-  emojiId: string
 ): KBtn {
-  return { text: sct(text), style, icon_custom_emoji_id: emojiId };
+  return { text: sct(text), style };
 }
 
 function mainMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        btn("GET NUMBER",          "success", E.lightning),
-        btn("WEB PANEL",           "primary", E.sparkle),
+        btn("GET NUMBER",           "success"),
+        btn("WEB PANEL",            "primary"),
       ],
       [
-        btn("SUPPORT ( DEVELOPER )", "danger", E.support),
+        btn("SUPPORT ( DEVELOPER )", "danger"),
       ],
       [
-        btn("SEARCH NUMBER",       "primary", E.search),
-        btn("BUY CREDIT",          "success", E.buy),
+        btn("SEARCH NUMBER",        "primary"),
+        btn("BUY CREDIT",           "success"),
       ],
       [
-        btn("STATUS",              "primary", E.globe),
-        btn("PROFILE",             "primary", E.profile),
+        btn("STATUS",               "primary"),
+        btn("PROFILE",              "primary"),
       ],
       [
-        btn("GIFT CARD",           "success", E.gift),
-        btn("REFER & EARN",        "success", E.coin),
+        btn("GIFT CARD",            "success"),
+        btn("REFER & EARN",         "success"),
       ],
       [
-        btn("BACK",                "danger",  E.back),
+        btn("BACK",                 "danger"),
       ],
     ],
     resize_keyboard: true,
@@ -243,19 +242,19 @@ function numberMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        btn("NEW NUMBER",          "success", E.newnum),
-        btn("WATCH SMS",           "success", E.eye),
+        btn("NEW NUMBER",       "success"),
+        btn("WATCH SMS",        "success"),
       ],
       [
-        btn("SMS HISTORY",         "primary", E.history),
-        btn("STOP WATCH",          "danger",  E.stop),
+        btn("SMS HISTORY",      "primary"),
+        btn("STOP WATCH",       "danger"),
       ],
       [
-        btn("SEND SMS",            "primary", E.signal),
-        btn("NUMBERS HISTORY",     "primary", E.history),
+        btn("SEND SMS",         "primary"),
+        btn("NUMBERS HISTORY",  "primary"),
       ],
       [
-        btn("BACK",                "danger",  E.back),
+        btn("BACK",             "danger"),
       ],
     ],
     resize_keyboard: true,
@@ -267,11 +266,11 @@ function watchMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        btn("STOP WATCH",          "danger",  E.stop),
-        btn("SMS HISTORY",         "primary", E.history),
+        btn("STOP WATCH",   "danger"),
+        btn("SMS HISTORY",  "primary"),
       ],
       [
-        btn("BACK",                "danger",  E.back),
+        btn("BACK",         "danger"),
       ],
     ],
     resize_keyboard: true,
@@ -282,7 +281,7 @@ function watchMenuKeyboard(): CKeyboard {
 function cancelKeyboard(): CKeyboard {
   return {
     keyboard: [
-      [ btn("CANCEL", "danger", E.back) ],
+      [ btn("CANCEL", "danger") ],
     ],
     resize_keyboard: true,
     is_persistent: true,
