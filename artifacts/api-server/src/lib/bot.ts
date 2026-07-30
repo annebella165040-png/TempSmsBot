@@ -329,27 +329,28 @@ async function checkMembership(bot: TelegramBot, telegramId: string): Promise<bo
 }
 
 // Build 2×2 inline channel keyboard with join status indicators
+// color:3 + style:"success" = green on modern Telegram clients
 function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_keyboard: any[][] } {
   const rows: any[][] = [];
-  // 2 channels per row
   for (let i = 0; i < REQUIRED_CHANNELS.length; i += 2) {
     const row: any[] = [];
     for (let j = i; j < Math.min(i + 2, REQUIRED_CHANNELS.length); j++) {
-      const ch  = REQUIRED_CHANNELS[j];
-      const ok  = joined[j];
+      const ch = REQUIRED_CHANNELS[j];
+      const ok = joined[j];
       row.push({
         text:  (ok ? "✅ " : "") + ch.label + " ↗",
         url:   ch.url,
-        color: 3, // green (success) — supported in newer Telegram clients
+        color: 3,
+        style: "success",
       });
     }
     rows.push(row);
   }
-  // Bottom action button
   rows.push([{
     text:          allJoined ? "✅ ᴀʟʟ ᴊᴏɪɴᴇᴅ — ᴇɴᴛᴇʀ ʙᴏᴛ" : "✅ ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ",
     callback_data: "check_joined",
     color:         3,
+    style:         "success",
   }]);
   return { inline_keyboard: rows };
 }
@@ -388,16 +389,16 @@ function setupHandlers(bot: TelegramBot) {
         const referredBy = param?.startsWith("ref_") ? param : null;
         const user       = await getOrCreateUser(msg, referredBy);
 
-        // Welcome message with premium emoji
+        // Welcome message — plain Unicode emoji so they render identically for all users
         await send(
           chatId,
-          `${em(E.lightning, "⚡")} <b>AnneBella Sms Panel</b> ${em(E.lightning, "⚡")}\n` +
+          `✨ <b>AnneBella Sms Panel</b> ✨\n` +
           `${divider()}\n\n` +
-          `${em(E.sparkle, "✨")} <b>WELCOME TO AnneBella Sms Panel!</b>\n\n` +
-          `${em(E.lightning, "⚡")} <b>AAPKO 1 GHANTE KE LIYE GET NUMBER FREE MILA!</b>\n` +
+          `✨ <b>WELCOME TO AnneBella Sms Panel!</b>\n\n` +
+          `⚡⚡ <b>AAPKO 1 GHANTE KE LIYE GET NUMBER FREE MILA!</b>\n` +
           `KOI LIMIT NAHI — 1HR TAK FULL ACCESS.\n\n` +
-          `${em(E.expire, "⌛")} 1HR KE BAAD GET NUMBER LOCK HO JAYEGA.\n` +
-          `${em(E.coin, "🪙")} REFER KARO AUR EXTRA HOURS PAO!`,
+          `⌛ 1HR KE BAAD GET NUMBER LOCK HO JAYEGA.\n` +
+          `🏧 REFER KARO AUR EXTRA HOURS PAO!`,
           { parse_mode: "HTML", reply_markup: { remove_keyboard: true } }
         );
 
