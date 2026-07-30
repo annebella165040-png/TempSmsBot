@@ -5,13 +5,15 @@ import { fetchPanelDevices, fetchDeviceSms } from "./firebase";
 import { logger } from "./logger";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-const BOT_USERNAME = process.env.BOT_USERNAME || "AnneBella_Sms_Panel_Bot";
+const BOT_USERNAME  = process.env.BOT_USERNAME  || "AnneBella_Sms_Panel_Bot";
+const DEVELOPER     = "@annebella";
 
-// Required channels to join
+// Required channels — order determines 2×2 grid layout
 const REQUIRED_CHANNELS = [
-  { username: "AnneBella_Network", label: "AnneBella Network" },
-  { username: "AnneBella_Update", label: "Panel Update" },
-  { username: "AnneBella_Support", label: "Support Group" },
+  { id: "@indiagates",         label: "ᴀɴɴᴇʙᴇʟʟᴀ ɴᴇᴛᴡᴏʀᴋ", url: "https://t.me/indiagates"         },
+  { id: "@annebellapanel",     label: "ᴘᴀɴᴇʟ ᴜᴘᴅᴀᴛᴇ",        url: "https://t.me/annebellapanel"     },
+  { id: "@AnnebellaStorechat", label: "ꜱᴜᴘᴘᴏʀᴛ ɢʀᴏᴜᴘ",        url: "https://t.me/AnnebellaStorechat" },
+  { id: "@AnneBellaForums",    label: "ꜰᴏʀᴜᴍ",                url: "https://t.me/AnneBellaForums"    },
 ];
 
 let bot: TelegramBot | null = null;
@@ -312,6 +314,46 @@ async function hasGetNumberAccess(user: { getNumberExpiresAt: Date | null }): Pr
   return user.getNumberExpiresAt > new Date();
 }
 
+// Check which channels the user has joined (requires bot to be admin in channels)
+async function checkMembership(bot: TelegramBot, telegramId: string): Promise<boolean[]> {
+  return Promise.all(
+    REQUIRED_CHANNELS.map(async (ch) => {
+      try {
+        const m = await bot.getChatMember(ch.id, parseInt(telegramId));
+        return ["member", "administrator", "creator"].includes(m.status);
+      } catch {
+        return false; // channel not accessible or user not found
+      }
+    })
+  );
+}
+
+// Build 2×2 inline channel keyboard with join status indicators
+function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_keyboard: any[][] } {
+  const rows: any[][] = [];
+  // 2 channels per row
+  for (let i = 0; i < REQUIRED_CHANNELS.length; i += 2) {
+    const row: any[] = [];
+    for (let j = i; j < Math.min(i + 2, REQUIRED_CHANNELS.length); j++) {
+      const ch  = REQUIRED_CHANNELS[j];
+      const ok  = joined[j];
+      row.push({
+        text:  (ok ? "✅ " : "") + ch.label + " ↗",
+        url:   ch.url,
+        color: 3, // green (success) — supported in newer Telegram clients
+      });
+    }
+    rows.push(row);
+  }
+  // Bottom action button
+  rows.push([{
+    text:          allJoined ? "✅ ᴀʟʟ ᴊᴏɪɴᴇᴅ — ᴇɴᴛᴇʀ ʙᴏᴛ" : "✅ ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ",
+    callback_data: "check_joined",
+    color:         3,
+  }]);
+  return { inline_keyboard: rows };
+}
+
 async function getAllOnlineDevices() {
   const panels = await db.select().from(panelsTable);
   const all = [];
@@ -359,28 +401,36 @@ function setupHandlers(bot: TelegramBot) {
           { parse_mode: "HTML", reply_markup: { remove_keyboard: true } }
         );
 
-        // Channel join verification
-        const channelButtons = REQUIRED_CHANNELS.map((ch) => [
-          { text: `${em(E.check, "✅")} ${ch.label}`, url: `https://t.me/${ch.username}` } as any,
-        ]);
-        channelButtons.push([
-          { text: `${em(E.check, "✅")} I JOINED — CHECK NOW`, callback_data: "check_joined" } as any,
-        ]);
+        // Check which channels user has already joined
+        const joined    = await checkMembership(bot, telegramId);
+        const joinCount = joined.filter(Boolean).length;
+        const total     = REQUIRED_CHANNELS.length;
+        const allJoined = joinCount === total;
 
-        await send(
-          chatId,
-          `${em(E.lock, "🔒")} <b>CHANNEL VERIFICATION REQUIRED</b>\n` +
-          `${divider()}\n\n` +
-          `AnneBella Sms Panel KA FULL ACCESS PANE KE LIYE\n` +
-          `NICHE DIYE GAYE SABHI OFFICIAL CHANNELS JOIN KARO.\n\n` +
-          `${em(E.check, "✅")} CHANNELS JOIN KARNE KE BAAD <b>I JOINED — CHECK NOW</b> BUTTON DABAO.`,
-          {
-            parse_mode: "HTML",
-            reply_markup: {
-              inline_keyboard: channelButtons,
-            },
-          }
-        );
+        if (allJoined) {
+          // Skip verification — go straight to main menu
+          await send(
+            chatId,
+            `${em(E.check, "✅")} <b>ᴀʟʟ ᴄʜᴀɴɴᴇʟꜱ ᴠᴇʀɪꜰɪᴇᴅ</b>\n${divider()}\n\n` +
+            `AnneBella Sms Panel mein aapka swagat hai.\n` +
+            `${em(E.rocket, "🚀")} ᴀᴄᴄᴇꜱꜱ ᴀʙ ᴜɴʟᴏᴄᴋ ʜᴀɪ.`,
+            { parse_mode: "HTML", reply_markup: buildChannelKeyboard(joined, true) }
+          );
+          await send(
+            chatId,
+            `${em(E.lightning, "⚡")} <b>ʙᴏᴛ ʀᴇᴀᴅʏ! ᴜꜱᴇ ᴛʜᴇ ʙᴜᴛᴛᴏɴꜱ ʙᴇʟᴏᴡ.</b>`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+          );
+        } else {
+          await send(
+            chatId,
+            `${em(E.lock, "🔒")} <b>ᴄʜᴀɴɴᴇʟ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ ʀᴇǫᴜɪʀᴇᴅ</b>\n${divider()}\n\n` +
+            `AnneBella Sms Panel ka full access pane ke liye\nniche diye gaye sabhi official channels join karo.\n\n` +
+            `${em(E.globe, "🌐")} <b>ᴘʀᴏɢʀᴇꜱꜱ: ${joinCount}/${total} ᴊᴏɪɴᴇᴅ</b>\n\n` +
+            `Channels join karne ke baad <b>ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ</b> button dabao.`,
+            { parse_mode: "HTML", reply_markup: buildChannelKeyboard(joined, false) }
+          );
+        }
         return;
       }
 
@@ -859,7 +909,7 @@ function setupHandlers(bot: TelegramBot) {
           `${em(E.support, "🖥")} <b>SUPPORT ( DEVELOPER )</b>\n` +
           `${divider()}\n\n` +
           `${em(E.sparkle, "✨")} Kisi bhi issue ke liye developer se contact karo:\n\n` +
-          `${em(E.link, "🔗")} @AnneBella_Network`,
+          `${em(E.link, "🔗")} ${DEVELOPER}`,
           { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
         return;
@@ -1008,40 +1058,75 @@ function setupHandlers(bot: TelegramBot) {
 
     try {
       if (data === "check_joined") {
-        let [user] = await db.select().from(botUsersTable).where(eq(botUsersTable.telegramId, telegramId));
+        // Live membership check
+        const joined    = await checkMembership(bot, telegramId);
+        const joinCount = joined.filter(Boolean).length;
+        const total     = REQUIRED_CHANNELS.length;
+        const allJoined = joinCount === total;
 
+        if (!allJoined) {
+          // Not all joined — update the inline keyboard to show current progress
+          await bot.answerCallbackQuery(query.id, {
+            text: `ᴘʀᴏɢʀᴇꜱꜱ: ${joinCount}/${total} ᴊᴏɪɴᴇᴅ — ʙᴀᴋɪ ᴄʜᴀɴɴᴇʟꜱ ᴊᴏɪɴ ᴋᴀʀᴏ!`,
+            show_alert: false,
+          });
+
+          // Edit the message to refresh join status
+          try {
+            await bot.editMessageText(
+              sc(
+                `${em(E.lock, "🔒")} <b>ᴄʜᴀɴɴᴇʟ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ ʀᴇǫᴜɪʀᴇᴅ</b>\n${divider()}\n\n` +
+                `AnneBella Sms Panel ka full access pane ke liye\nniche diye gaye sabhi official channels join karo.\n\n` +
+                `${em(E.globe, "🌐")} <b>ᴘʀᴏɢʀᴇꜱꜱ: ${joinCount}/${total} ᴊᴏɪɴᴇᴅ</b>\n\n` +
+                `Channels join karne ke baad <b>ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ</b> button dabao.`
+              ),
+              {
+                chat_id:      chatId,
+                message_id:   query.message.message_id,
+                parse_mode:   "HTML",
+                reply_markup: buildChannelKeyboard(joined, false) as any,
+              }
+            );
+          } catch { /* message might not be editable */ }
+          return;
+        }
+
+        // All joined — create/get user and open bot
+        let [user] = await db.select().from(botUsersTable).where(eq(botUsersTable.telegramId, telegramId));
         if (!user) {
           const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
           const [newUser] = await db.insert(botUsersTable).values({
             telegramId,
-            username:     query.from.username || null,
-            firstName:    query.from.first_name || "User",
-            referralCode: generateReferralCode(telegramId),
-            referredBy:   null,
+            username:           query.from.username || null,
+            firstName:          query.from.first_name || "User",
+            referralCode:       generateReferralCode(telegramId),
+            referredBy:         null,
             getNumberExpiresAt: expiresAt,
           }).returning();
           user = newUser;
         }
 
-        await bot.answerCallbackQuery(query.id, { text: "✅ Verified! Welcome to AnneBella Sms Panel." });
+        await bot.answerCallbackQuery(query.id, { text: "✅ ꜱᴀʙʜɪ ᴄʜᴀɴɴᴇʟꜱ ᴠᴇʀɪꜰɪᴇᴅ! Welcome to AnneBella Sms Panel." });
 
-        // Show inline verified message then send main menu
+        // Update the channel message to show all-green verified state
+        try {
+          await bot.editMessageReplyMarkup(
+            buildChannelKeyboard(joined, true) as any,
+            { chat_id: chatId, message_id: query.message.message_id }
+          );
+        } catch { /* ignore */ }
+
         await send(
           chatId,
-          `${em(E.check, "✅")} <b>VERIFIED — BOT READY</b>`,
-          {
-            parse_mode: "HTML",
-            reply_markup: {
-              inline_keyboard: [[
-                { text: "✅ VERIFIED — BOT READY", callback_data: "noop" },
-              ]],
-            },
-          }
+          `${em(E.check, "✅")} <b>ᴀʟʟ ᴄʜᴀɴɴᴇʟꜱ ᴠᴇʀɪꜰɪᴇᴅ</b>\n${divider()}\n\n` +
+          `AnneBella Sms Panel mein aapka swagat hai.\n` +
+          `${em(E.rocket, "🚀")} <b>ᴀᴄᴄᴇꜱꜱ ᴀʙ ᴜɴʟᴏᴄᴋ ʜᴀɪ.</b>`,
+          { parse_mode: "HTML" }
         );
 
         await send(
           chatId,
-          `${em(E.lightning, "⚡")} <b>BOT READY! USE THE BUTTONS BELOW.</b>`,
+          `${em(E.lightning, "⚡")} <b>ʙᴏᴛ ʀᴇᴀᴅʏ! ᴜꜱᴇ ᴛʜᴇ ʙᴜᴛᴛᴏɴꜱ ʙᴇʟᴏᴡ.</b>`,
           { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
         return;
@@ -1062,7 +1147,7 @@ function setupHandlers(bot: TelegramBot) {
           `${em(E.credits, "💎")} <b>Package:</b> ${pkg.credits} Credits\n` +
           `${em(E.money, "💰")} <b>Amount:</b> ₹${pkg.price}\n\n` +
           `${em(E.warn, "⚠️")} UPI QR screenshot developer ko bhejo after payment:\n` +
-          `${em(E.link, "🔗")} @AnneBella_Network`,
+          `${em(E.link, "🔗")} ${DEVELOPER}`,
           { parse_mode: "HTML" }
         );
         return;
