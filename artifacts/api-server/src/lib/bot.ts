@@ -409,28 +409,46 @@ async function checkMembership(bot: TelegramBot, telegramId: string): Promise<bo
   );
 }
 
-// ─── Inline button with premium emoji via Bot API entities ───────────────────
-// Telegram Bot API 7.0+ supports `entities` on InlineKeyboardButton text.
-// The Unicode fallback char sits at offset 0; the entity overlays the custom
-// emoji sticker on top for Premium users. Non-premium see the plain Unicode.
+// ─── Raw Telegram HTTP request (bypasses node-telegram-bot-api) ──────────────
+// Needed because node-telegram-bot-api strips unknown fields like
+// icon_custom_emoji_id on InlineKeyboardButton.  We hit the Bot API directly.
+async function rawTelegramRequest(method: string, payload: Record<string, any>): Promise<any> {
+  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// Remove icon_custom_emoji_id / style from all buttons (fallback when Telegram rejects them)
+function stripKeyboardIcons(payload: Record<string, any>): Record<string, any> {
+  const p = JSON.parse(JSON.stringify(payload));
+  const rm = p.reply_markup;
+  if (rm?.inline_keyboard) {
+    for (const row of rm.inline_keyboard)
+      for (const b of row) { delete b.icon_custom_emoji_id; delete b.style; }
+  }
+  return p;
+}
+
+// ─── Inline button with premium emoji via icon_custom_emoji_id (Adsbot style) ─
+// Same field as ReplyKeyboardButton — works on InlineKeyboardButton too when
+// sent via raw HTTP.  Button text is clean small-caps only; icon appears left.
 function iBtn(opts: {
-  label:    string;
-  emojiId:  string;
-  fallback: string;            // Unicode placeholder e.g. "✅"
-  url?:     string;
-  cb?:      string;
-  color?:   number;
-  style?:   "success" | "danger" | "primary";
+  label:   string;
+  emojiId: string;
+  url?:    string;
+  cb?:     string;
+  style?:  "success" | "danger" | "primary";
 }): any {
-  const emojiLen = [...opts.fallback].length; // surrogate-safe length
   const btn: any = {
-    text:     opts.fallback + " " + opts.label,
-    color:    opts.color ?? 3,
-    style:    opts.style ?? "success",
-    entities: [{ type: "custom_emoji", offset: 0, length: emojiLen, custom_emoji_id: opts.emojiId }],
+    text:                opts.label,
+    style:               opts.style ?? "success",
+    icon_custom_emoji_id: opts.emojiId,
   };
-  if (opts.url) btn.url          = opts.url;
-  if (opts.cb)  btn.callback_data = opts.cb;
+  if (opts.url) btn.url           = opts.url;
+  if (opts.cb)  btn.callback_data  = opts.cb;
   return btn;
 }
 
@@ -445,20 +463,18 @@ function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_k
       row.push(iBtn({
         label:   ch.label,
         emojiId: ok ? E.check : E.link,
-        fallback: ok ? "✅" : "🔗",
         url:     ch.url,
+        style:   ok ? "success" : "primary",
       }));
     }
     rows.push(row);
   }
 
-  // "I JOINED" / "ALL JOINED" — blue
+  // "I JOINED" / "ALL JOINED" — blue primary
   rows.push([iBtn({
     label:   allJoined ? "ᴀʟʟ ᴊᴏɪɴᴇᴅ — ᴇɴᴛᴇʀ ʙᴏᴛ" : "ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ",
     emojiId: allJoined ? E.rocket : E.check,
-    fallback: allJoined ? "🚀" : "✅",
     cb:      "check_joined",
-    color:   4,
     style:   "primary",
   })]);
   return { inline_keyboard: rows };
@@ -481,9 +497,33 @@ const watchLastSms   = new Map<string, string>();
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
 function setupHandlers(bot: TelegramBot) {
-  // Auto-applies sc() small-caps + defaults parse_mode to HTML
-  const send = (cid: number, html: string, opts: Record<string, any> = {}) =>
-    bot.sendMessage(cid, sc(html), { parse_mode: "HTML", ...opts });
+  // Auto-applies sc() small-caps + defaults parse_mode to HTML.
+  // When an inline keyboard is present, sends via raw HTTP so that
+  // icon_custom_emoji_id on InlineKeyboardButton is preserved
+  // (node-telegram-bot-api strips unknown fields during serialisation).
+  const send = async (cid: number, html: string, opts: Record<string, any> = {}) => {
+    const rm = opts.reply_markup;
+    const hasInline = rm && typeof rm === "object" && "inline_keyboard" in rm;
+    if (hasInline) {
+      const payload: Record<string, any> = {
+        chat_id:      cid,
+        text:         sc(html),
+        parse_mode:   "HTML",
+        reply_markup: rm,
+      };
+      // carry through any extra opts (disable_web_page_preview etc.)
+      for (const [k, v] of Object.entries(opts)) {
+        if (k !== "reply_markup" && k !== "parse_mode") payload[k] = v;
+      }
+      const result = await rawTelegramRequest("sendMessage", payload);
+      // If Telegram rejects (e.g. icon not supported), retry without icons
+      if (!result.ok) {
+        return rawTelegramRequest("sendMessage", stripKeyboardIcons(payload));
+      }
+      return result;
+    }
+    return bot.sendMessage(cid, sc(html), { parse_mode: "HTML", ...opts });
+  };
 
   bot.on("message", async (msg) => {
     if (!msg.from || !msg.text) return;
@@ -1181,22 +1221,22 @@ function setupHandlers(bot: TelegramBot) {
             show_alert: false,
           });
 
-          // Edit the message to refresh join status
+          // Edit the message to refresh join status — raw HTTP preserves icon_custom_emoji_id
           try {
-            await bot.editMessageText(
-              sc(
+            const editPayload = {
+              chat_id:      chatId,
+              message_id:   query.message.message_id,
+              text: sc(
  `${em(E.lock, "")} <b>ᴄʜᴀɴɴᴇʟ ᴠᴇʀɪꜰɪᴄᴀᴛɪᴏɴ ʀᴇǫᴜɪʀᴇᴅ</b>\n${divider()}\n\n` +
             `ANNEBELLA SMS PANEL KA FULL ACCESS PANE KE LIYE\nNICHE DIYE GAYE SABHI OFFICIAL CHANNELS JOIN KARO.\n\n` +
             `${em(E.globe, "")} <b>ᴘʀᴏɢʀᴇꜱꜱ: ${joinCount}/${total} ᴊᴏɪɴᴇᴅ</b>\n\n` +
             `CHANNELS JOIN KARNE KE BAAD <b>ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ</b> BUTTON DABAO.`
               ),
-              {
-                chat_id:      chatId,
-                message_id:   query.message.message_id,
-                parse_mode:   "HTML",
-                reply_markup: buildChannelKeyboard(joined, false) as any,
-              }
-            );
+              parse_mode:   "HTML",
+              reply_markup: buildChannelKeyboard(joined, false),
+            };
+            const r = await rawTelegramRequest("editMessageText", editPayload);
+            if (!r.ok) await rawTelegramRequest("editMessageText", stripKeyboardIcons(editPayload));
           } catch { /* message might not be editable */ }
           return;
         }
@@ -1218,12 +1258,18 @@ function setupHandlers(bot: TelegramBot) {
 
         await bot.answerCallbackQuery(query.id, { text: "✅ ꜱᴀʙʜɪ ᴄʜᴀɴɴᴇʟꜱ ᴠᴇʀɪꜰɪᴇᴅ! Welcome to ANNEBELLA SMS PANEL." });
 
-        // Update the channel message to show all-green verified state
+        // Update the channel message to show all-green verified state — raw HTTP
         try {
-          await bot.editMessageReplyMarkup(
-            buildChannelKeyboard(joined, true) as any,
-            { chat_id: chatId, message_id: query.message.message_id }
-          );
+          const r = await rawTelegramRequest("editMessageReplyMarkup", {
+            chat_id:      chatId,
+            message_id:   query.message.message_id,
+            reply_markup: buildChannelKeyboard(joined, true),
+          });
+          if (!r.ok) await rawTelegramRequest("editMessageReplyMarkup", stripKeyboardIcons({
+            chat_id:      chatId,
+            message_id:   query.message.message_id,
+            reply_markup: buildChannelKeyboard(joined, true),
+          }));
         } catch { /* ignore */ }
 
         await send(
