@@ -397,7 +397,7 @@ function setupHandlers(bot: TelegramBot) {
 
       // ── Main menu navigation ─────────────────────────────────────────────
 
-      if (text === "GET NUMBER") {
+      if (text === sct("GET NUMBER")) {
         const hasAccess = await hasGetNumberAccess(user);
         if (!hasAccess) {
           await send(
@@ -456,7 +456,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "NEW NUMBER") {
+      if (text === sct("NEW NUMBER")) {
         const hasAccess = await hasGetNumberAccess(user);
         if (!hasAccess) {
           await send(
@@ -512,7 +512,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "WATCH SMS") {
+      if (text === sct("WATCH SMS")) {
         if (!user.assignedDeviceId || !user.assignedPanelId) {
           await send(chatId, "First GET NUMBER dabao.", { reply_markup: mainMenuKeyboard() as any });
           return;
@@ -565,7 +565,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "STOP WATCH") {
+      if (text === sct("STOP WATCH")) {
         const iv = watchIntervals.get(telegramId);
         if (iv) { clearInterval(iv); watchIntervals.delete(telegramId); watchLastSms.delete(telegramId); }
         await db.update(botUsersTable).set({ state: "number_menu" }).where(eq(botUsersTable.id, user.id));
@@ -577,7 +577,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "SMS HISTORY") {
+      if (text === sct("SMS HISTORY")) {
         if (!user.assignedDeviceId || !user.assignedPanelId) {
           await send(chatId, "First GET NUMBER dabao.", { reply_markup: mainMenuKeyboard() as any });
           return;
@@ -609,7 +609,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "NUMBERS HISTORY") {
+      if (text === sct("NUMBERS HISTORY")) {
         if (!user.assignedDeviceId || !user.assignedPanelId) {
           await send(chatId, "Koi number assign nahi hai abhi.", { reply_markup: mainMenuKeyboard() as any });
           return;
@@ -624,7 +624,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "STATUS") {
+      if (text === sct("STATUS")) {
         const panels = await db.select().from(panelsTable);
         let totalOnline = 0, totalOffline = 0, totalDevices = 0;
         for (const panel of panels) {
@@ -648,7 +648,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "SEARCH NUMBER") {
+      if (text === sct("SEARCH NUMBER")) {
         const panels = await db.select().from(panelsTable);
         let totalOnline = 0;
         for (const panel of panels) {
@@ -669,7 +669,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "REFER & EARN") {
+      if (text === sct("REFER & EARN")) {
         const expiryStr = user.getNumberExpiresAt && user.getNumberExpiresAt > new Date()
           ? `${em(E.check, "✅")} ACTIVE — ${Math.max(0, Math.floor((user.getNumberExpiresAt.getTime() - Date.now()) / 60000))}m remaining`
           : `${em(E.offline, "🔴")} EXPIRED`;
@@ -706,7 +706,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "GIFT CARD") {
+      if (text === sct("GIFT CARD")) {
         await db.update(botUsersTable).set({ state: "gift_card" }).where(eq(botUsersTable.id, user.id));
         await send(
           chatId,
@@ -719,7 +719,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "WEB PANEL") {
+      if (text === sct("WEB PANEL")) {
         if (user.referralCount < 10) {
           await send(
             chatId,
@@ -756,7 +756,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "SEND SMS") {
+      if (text === sct("SEND SMS")) {
         if (!user.sendSmsUnlocked) {
           await send(
             chatId,
@@ -791,7 +791,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "PROFILE") {
+      if (text === sct("PROFILE")) {
         const getNum = user.getNumberExpiresAt && user.getNumberExpiresAt > new Date()
           ? `${em(E.check, "✅")} ACTIVE — ${Math.max(0, Math.floor((user.getNumberExpiresAt.getTime() - Date.now()) / 60000))}m`
           : `${em(E.offline, "🔴")} EXPIRED`;
@@ -823,7 +823,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "BUY CREDIT") {
+      if (text === sct("BUY CREDIT")) {
         await send(
           chatId,
           `${em(E.buy, "💳")} <b>BUY CREDIT</b>\n` +
@@ -853,7 +853,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "SUPPORT ( DEVELOPER )") {
+      if (text === sct("SUPPORT ( DEVELOPER )")) {
         await send(
           chatId,
           `${em(E.support, "🖥")} <b>SUPPORT ( DEVELOPER )</b>\n` +
@@ -865,7 +865,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "BACK" || text === "CANCEL") {
+      if (text === sct("BACK") || text === sct("CANCEL")) {
         const iv = watchIntervals.get(telegramId);
         if (iv) { clearInterval(iv); watchIntervals.delete(telegramId); watchLastSms.delete(telegramId); }
         await db.update(botUsersTable).set({ state: "main_menu" }).where(eq(botUsersTable.id, user.id));
