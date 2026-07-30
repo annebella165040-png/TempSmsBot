@@ -101,42 +101,49 @@ function em(id: string, fallback: string): string {
 }
 
 // ─── Keyboards ────────────────────────────────────────────────────────────────
-// Button color values (Telegram Bot API extended — color field):
-//   1 = blue/primary, 2 = green/positive, 3 = red/negative
-// These are passed as extra fields; standard clients that support it will render colors.
+// Telegram Bot API fields on KeyboardButton:
+//   style: "success" (green) | "danger" (red) | "primary" (blue)
+//   icon_custom_emoji_id: premium emoji ID shown BEFORE the button text
 
-type KBtn = TelegramBot.KeyboardButton & { color?: number };
+type KBtn = TelegramBot.KeyboardButton & {
+  style?: "success" | "danger" | "primary";
+  icon_custom_emoji_id?: string;
+};
 type KRow = KBtn[];
 type CKeyboard = { keyboard: KRow[]; resize_keyboard: boolean; is_persistent?: boolean };
 
-const GREEN = 2;
-const RED   = 3;
-// Blue = default (no color field or 1)
+function btn(
+  text: string,
+  style: "success" | "danger" | "primary",
+  emojiId: string
+): KBtn {
+  return { text, style, icon_custom_emoji_id: emojiId };
+}
 
 function mainMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        { text: "⚡ GET NUMBER",       color: GREEN },
-        { text: "🌐 WEB PANEL",        color: 1 },
+        btn("GET NUMBER",          "success", E.lightning),
+        btn("WEB PANEL",           "primary", E.sparkle),
       ],
       [
-        { text: "📋 SUPPORT ( DEVELOPER )", color: RED },
+        btn("SUPPORT ( DEVELOPER )", "danger", E.support),
       ],
       [
-        { text: "🔎 SEARCH NUMBER",    color: 1 },
-        { text: "💳 BUY CREDIT",       color: GREEN },
+        btn("SEARCH NUMBER",       "primary", E.search),
+        btn("BUY CREDIT",          "success", E.buy),
       ],
       [
-        { text: "🌐 STATUS",           color: 1 },
-        { text: "👤 PROFILE",          color: 1 },
+        btn("STATUS",              "primary", E.globe),
+        btn("PROFILE",             "primary", E.profile),
       ],
       [
-        { text: "🎁 GIFT CARD",        color: GREEN },
-        { text: "🪙 REFER & EARN",     color: GREEN },
+        btn("GIFT CARD",           "success", E.gift),
+        btn("REFER & EARN",        "success", E.coin),
       ],
       [
-        { text: "↩️ BACK",            color: RED },
+        btn("BACK",                "danger",  E.back),
       ],
     ],
     resize_keyboard: true,
@@ -148,19 +155,19 @@ function numberMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        { text: "🆕 NEW NUMBER",       color: GREEN },
-        { text: "🎵 WATCH SMS",        color: GREEN },
+        btn("NEW NUMBER",          "success", E.newnum),
+        btn("WATCH SMS",           "success", E.eye),
       ],
       [
-        { text: "📋 SMS HISTORY",      color: 1 },
-        { text: "🛑 STOP WATCH",       color: RED },
+        btn("SMS HISTORY",         "primary", E.history),
+        btn("STOP WATCH",          "danger",  E.stop),
       ],
       [
-        { text: "📢 SEND SMS",         color: 1 },
-        { text: "👁 NUMBERS HISTORY",  color: 1 },
+        btn("SEND SMS",            "primary", E.signal),
+        btn("NUMBERS HISTORY",     "primary", E.history),
       ],
       [
-        { text: "↩️ BACK",            color: RED },
+        btn("BACK",                "danger",  E.back),
       ],
     ],
     resize_keyboard: true,
@@ -172,11 +179,11 @@ function watchMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        { text: "🛑 STOP WATCH",       color: RED },
-        { text: "📋 SMS HISTORY",      color: 1 },
+        btn("STOP WATCH",          "danger",  E.stop),
+        btn("SMS HISTORY",         "primary", E.history),
       ],
       [
-        { text: "↩️ BACK",            color: RED },
+        btn("BACK",                "danger",  E.back),
       ],
     ],
     resize_keyboard: true,
@@ -187,7 +194,7 @@ function watchMenuKeyboard(): CKeyboard {
 function cancelKeyboard(): CKeyboard {
   return {
     keyboard: [
-      [{ text: "↩️ CANCEL", color: RED }],
+      [ btn("CANCEL", "danger", E.back) ],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -358,7 +365,7 @@ function setupHandlers(bot: TelegramBot) {
 
       // ── Main menu navigation ─────────────────────────────────────────────
 
-      if (text === "⚡ GET NUMBER") {
+      if (text === "GET NUMBER") {
         const hasAccess = await hasGetNumberAccess(user);
         if (!hasAccess) {
           await bot.sendMessage(
@@ -417,7 +424,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "🆕 NEW NUMBER") {
+      if (text === "NEW NUMBER") {
         const hasAccess = await hasGetNumberAccess(user);
         if (!hasAccess) {
           await bot.sendMessage(
@@ -473,7 +480,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "🎵 WATCH SMS") {
+      if (text === "WATCH SMS") {
         if (!user.assignedDeviceId || !user.assignedPanelId) {
           await bot.sendMessage(chatId, "First GET NUMBER dabao.", { reply_markup: mainMenuKeyboard() as any });
           return;
@@ -526,7 +533,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "🛑 STOP WATCH") {
+      if (text === "STOP WATCH") {
         const iv = watchIntervals.get(telegramId);
         if (iv) { clearInterval(iv); watchIntervals.delete(telegramId); watchLastSms.delete(telegramId); }
         await db.update(botUsersTable).set({ state: "number_menu" }).where(eq(botUsersTable.id, user.id));
@@ -538,7 +545,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "📋 SMS HISTORY") {
+      if (text === "SMS HISTORY") {
         if (!user.assignedDeviceId || !user.assignedPanelId) {
           await bot.sendMessage(chatId, "First GET NUMBER dabao.", { reply_markup: mainMenuKeyboard() as any });
           return;
@@ -570,7 +577,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "👁 NUMBERS HISTORY") {
+      if (text === "NUMBERS HISTORY") {
         if (!user.assignedDeviceId || !user.assignedPanelId) {
           await bot.sendMessage(chatId, "Koi number assign nahi hai abhi.", { reply_markup: mainMenuKeyboard() as any });
           return;
@@ -585,7 +592,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "🌐 STATUS") {
+      if (text === "STATUS") {
         const panels = await db.select().from(panelsTable);
         let totalOnline = 0, totalOffline = 0, totalDevices = 0;
         for (const panel of panels) {
@@ -609,7 +616,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "🔎 SEARCH NUMBER") {
+      if (text === "SEARCH NUMBER") {
         const panels = await db.select().from(panelsTable);
         let totalOnline = 0;
         for (const panel of panels) {
@@ -630,7 +637,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "🪙 REFER & EARN") {
+      if (text === "REFER & EARN") {
         const expiryStr = user.getNumberExpiresAt && user.getNumberExpiresAt > new Date()
           ? `${em(E.check, "✅")} ACTIVE — ${Math.max(0, Math.floor((user.getNumberExpiresAt.getTime() - Date.now()) / 60000))}m remaining`
           : `${em(E.offline, "🔴")} EXPIRED`;
@@ -667,7 +674,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "🎁 GIFT CARD") {
+      if (text === "GIFT CARD") {
         await db.update(botUsersTable).set({ state: "gift_card" }).where(eq(botUsersTable.id, user.id));
         await bot.sendMessage(
           chatId,
@@ -680,7 +687,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "🌐 WEB PANEL") {
+      if (text === "WEB PANEL") {
         if (user.referralCount < 10) {
           await bot.sendMessage(
             chatId,
@@ -717,7 +724,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "📢 SEND SMS") {
+      if (text === "SEND SMS") {
         if (!user.sendSmsUnlocked) {
           await bot.sendMessage(
             chatId,
@@ -752,7 +759,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "👤 PROFILE") {
+      if (text === "PROFILE") {
         const getNum = user.getNumberExpiresAt && user.getNumberExpiresAt > new Date()
           ? `${em(E.check, "✅")} ACTIVE — ${Math.max(0, Math.floor((user.getNumberExpiresAt.getTime() - Date.now()) / 60000))}m`
           : `${em(E.offline, "🔴")} EXPIRED`;
@@ -784,7 +791,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "💳 BUY CREDIT") {
+      if (text === "BUY CREDIT") {
         await bot.sendMessage(
           chatId,
           `${em(E.buy, "💳")} <b>BUY CREDIT</b>\n` +
@@ -814,7 +821,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "📋 SUPPORT ( DEVELOPER )") {
+      if (text === "SUPPORT ( DEVELOPER )") {
         await bot.sendMessage(
           chatId,
           `${em(E.support, "🖥")} <b>SUPPORT ( DEVELOPER )</b>\n` +
@@ -826,7 +833,7 @@ function setupHandlers(bot: TelegramBot) {
         return;
       }
 
-      if (text === "↩️ BACK" || text === "↩️ CANCEL") {
+      if (text === "BACK" || text === "CANCEL") {
         const iv = watchIntervals.get(telegramId);
         if (iv) { clearInterval(iv); watchIntervals.delete(telegramId); watchLastSms.delete(telegramId); }
         await db.update(botUsersTable).set({ state: "main_menu" }).where(eq(botUsersTable.id, user.id));
