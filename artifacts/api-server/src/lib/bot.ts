@@ -50,7 +50,8 @@ const E = {
   rocket:       "5372917041193828849",   // 🚀
   search:       "5368309348739074032",   // 🔎
   signal:       "5352759161945867747",   // (back arrow — used for BACK button)
-  a1:           "5445033158456145975",   // new #1
+  a1:           "5445033158456145975",   // new #1 (status)
+  buy2:         "5445353829304387411",   // new (buy credit)
   a2:           "5104966345267610825",   // new #2
   a3:           "4918014360267260850",   // new #3
   a4:           "4915842446845281363",   // new #4
@@ -155,6 +156,7 @@ const E_FB: Record<string, string> = {
   "5258500422393415126": "💬",
   "5301096984617166561": "🔄",
   "5445033158456145975": "✦",
+  "5445353829304387411": "✦",
   "5104966345267610825": "✦",
   "4918014360267260850": "✦",
   "4915842446845281363": "✦",
@@ -232,10 +234,10 @@ function mainMenuKeyboard(): CKeyboard {
       ],
       [
         btn("SEARCH NUMBER",         "primary", E.search),    // 🔎
-        btn("BUY CREDIT",            "success", E.buy),       // 💳
+        btn("BUY CREDIT",            "success", E.buy2),      // new buy ID
       ],
       [
-        btn("STATUS",                "primary", E.a1),        // new #1
+        btn("STATUS",                "primary", E.name),      // 5190806721286657692
         btn("PROFILE",               "primary", E.profile),   // 👤
       ],
       [
@@ -407,10 +409,8 @@ function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_k
     for (let j = i; j < Math.min(i + 2, REQUIRED_CHANNELS.length); j++) {
       const ch = REQUIRED_CHANNELS[j];
       const ok = joined[j];
-      // Joined channels get a small-caps tick prefix (plain text only — inline
-      // buttons do not support premium/custom emoji, only reply-keyboard does)
       row.push({
-        text:  (ok ? "ᴊᴏɪɴᴇᴅ " : "") + ch.label,
+        text:  (ok ? "✅ " : "🔗 ") + ch.label,
         url:   ch.url,
         color: 3,
         style: "success",
@@ -421,7 +421,7 @@ function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_k
 
   // "I JOINED" / "ALL JOINED" button — blue (primary)
   rows.push([{
-    text:          allJoined ? "ᴀʟʟ ᴊᴏɪɴᴇᴅ — ᴇɴᴛᴇʀ ʙᴏᴛ" : "ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ",
+    text:          allJoined ? "✅ ᴀʟʟ ᴊᴏɪɴᴇᴅ — ᴇɴᴛᴇʀ ʙᴏᴛ" : "✅ ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ",
     callback_data: "check_joined",
     color:         4,
     style:         "primary",
