@@ -1206,8 +1206,15 @@ function setupHandlers(bot: TelegramBot) {
     const telegramId = String(query.from.id);
     const data       = query.data || "";
 
+    // Always answer callback_query immediately to remove button loading state
+    const safeAnswer = (text?: string) =>
+      bot.answerCallbackQuery(query.id, text ? { text, show_alert: false } : {}).catch(() => {});
+
     try {
       if (data === "check_joined") {
+        // Answer immediately so button loading clears — then do heavy check
+        await safeAnswer("ᴄʜᴇᴄᴋɪɴɢ...");
+
         // Live membership check
         const joined    = await checkMembership(bot, telegramId);
         const joinCount = joined.filter(Boolean).length;
@@ -1215,11 +1222,6 @@ function setupHandlers(bot: TelegramBot) {
         const allJoined = joinCount === total;
 
         if (!allJoined) {
-          // Not all joined — update the inline keyboard to show current progress
-          await bot.answerCallbackQuery(query.id, {
- text: `ᴘʀᴏɢʀᴇꜱꜱ: ${joinCount}/${total} ᴊᴏɪɴᴇᴅ — ʙᴀᴋɪ ᴄʜᴀɴɴᴇʟꜱ ᴊᴏɪɴ ᴋᴀʀᴏ!`,
-            show_alert: false,
-          });
 
           // Edit the message to refresh join status — raw HTTP preserves icon_custom_emoji_id
           try {
@@ -1256,7 +1258,7 @@ function setupHandlers(bot: TelegramBot) {
           user = newUser;
         }
 
-        await bot.answerCallbackQuery(query.id, { text: "✅ ꜱᴀʙʜɪ ᴄʜᴀɴɴᴇʟꜱ ᴠᴇʀɪꜰɪᴇᴅ! Welcome to ANNEBELLA SMS PANEL." });
+        // Already answered with safeAnswer("ᴄʜᴇᴄᴋɪɴɢ...") above
 
         // Update the channel message to show all-green verified state — raw HTTP
         try {
@@ -1310,13 +1312,15 @@ function setupHandlers(bot: TelegramBot) {
       }
 
       if (data === "noop") {
-        await bot.answerCallbackQuery(query.id);
+        await safeAnswer();
         return;
       }
 
-      await bot.answerCallbackQuery(query.id);
+      // Fallback answer for any unhandled callback
+      await safeAnswer();
     } catch (err) {
       logger.error({ err }, "Callback query error");
+      await safeAnswer(); // always clear loading state even on error
     }
   });
 
