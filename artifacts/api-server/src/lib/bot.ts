@@ -203,34 +203,37 @@ type CKeyboard = { keyboard: KRow[]; resize_keyboard: boolean; is_persistent?: b
 function btn(
   text: string,
   style: "success" | "danger" | "primary",
+  emojiId?: string
 ): KBtn {
-  return { text: sct(text), style };
+  return emojiId
+    ? { text: sct(text), style, icon_custom_emoji_id: emojiId }
+    : { text: sct(text), style };
 }
 
 function mainMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        btn("GET NUMBER",           "success"),
-        btn("WEB PANEL",            "primary"),
+        btn("GET NUMBER",            "success", E.phone),      // 📱
+        btn("WEB PANEL",             "primary", E.globe),      // 🌐
       ],
       [
-        btn("SUPPORT ( DEVELOPER )", "danger"),
+        btn("SUPPORT ( DEVELOPER )", "danger",  E.support),    // 🖥
       ],
       [
-        btn("SEARCH NUMBER",        "primary"),
-        btn("BUY CREDIT",           "success"),
+        btn("SEARCH NUMBER",         "primary", E.search),     // 🔎
+        btn("BUY CREDIT",            "success", E.buy),        // 💳
       ],
       [
-        btn("STATUS",               "primary"),
-        btn("PROFILE",              "primary"),
+        btn("STATUS",                "primary", E.signal),     // 📶
+        btn("PROFILE",               "primary", E.profile),    // 👤
       ],
       [
-        btn("GIFT CARD",            "success"),
-        btn("REFER & EARN",         "success"),
+        btn("GIFT CARD",             "success", E.gift),       // 🎁
+        btn("REFER & EARN",          "success", E.referral),   // 👥
       ],
       [
-        btn("BACK",                 "danger"),
+        btn("BACK",                  "danger",  E.back),       // ↩️
       ],
     ],
     resize_keyboard: true,
@@ -242,19 +245,19 @@ function numberMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        btn("NEW NUMBER",       "success"),
-        btn("WATCH SMS",        "success"),
+        btn("NEW NUMBER",      "success", E.refresh),    // 🔄
+        btn("WATCH SMS",       "success", E.eye),        // 👁
       ],
       [
-        btn("SMS HISTORY",      "primary"),
-        btn("STOP WATCH",       "danger"),
+        btn("SMS HISTORY",     "primary", E.history),    // 📋
+        btn("STOP WATCH",      "danger",  E.stop),       // 🛑
       ],
       [
-        btn("SEND SMS",         "primary"),
-        btn("NUMBERS HISTORY",  "primary"),
+        btn("SEND SMS",        "primary", E.sms),        // 💬
+        btn("NUMBERS HISTORY", "primary", E.phone),      // 📱
       ],
       [
-        btn("BACK",             "danger"),
+        btn("BACK",            "danger",  E.back),       // ↩️
       ],
     ],
     resize_keyboard: true,
@@ -266,11 +269,11 @@ function watchMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        btn("STOP WATCH",   "danger"),
-        btn("SMS HISTORY",  "primary"),
+        btn("STOP WATCH",  "danger",  E.stop),      // 🛑
+        btn("SMS HISTORY", "primary", E.history),  // 📋
       ],
       [
-        btn("BACK",         "danger"),
+        btn("BACK",        "danger",  E.back),     // ↩️
       ],
     ],
     resize_keyboard: true,
@@ -281,7 +284,7 @@ function watchMenuKeyboard(): CKeyboard {
 function cancelKeyboard(): CKeyboard {
   return {
     keyboard: [
-      [ btn("CANCEL", "danger") ],
+      [ btn("CANCEL", "danger", E.stop) ],  // 🛑
     ],
     resize_keyboard: true,
     is_persistent: true,
