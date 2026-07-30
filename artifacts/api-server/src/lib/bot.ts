@@ -1260,19 +1260,10 @@ function setupHandlers(bot: TelegramBot) {
 
         // Already answered with safeAnswer("ᴄʜᴇᴄᴋɪɴɢ...") above
 
-        // Update the channel message to show all-green verified state — raw HTTP
+        // Delete the force-join verification message — it's no longer needed
         try {
-          const r = await rawTelegramRequest("editMessageReplyMarkup", {
-            chat_id:      chatId,
-            message_id:   query.message.message_id,
-            reply_markup: buildChannelKeyboard(joined, true),
-          });
-          if (!r.ok) await rawTelegramRequest("editMessageReplyMarkup", stripKeyboardIcons({
-            chat_id:      chatId,
-            message_id:   query.message.message_id,
-            reply_markup: buildChannelKeyboard(joined, true),
-          }));
-        } catch { /* ignore */ }
+          await bot.deleteMessage(chatId, query.message.message_id);
+        } catch { /* ignore if already deleted */ }
 
         await send(
           chatId,
