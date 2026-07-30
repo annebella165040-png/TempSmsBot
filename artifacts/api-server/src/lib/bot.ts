@@ -388,20 +388,6 @@ async function checkMembership(bot: TelegramBot, telegramId: string): Promise<bo
 
 // Build 2×2 inline channel keyboard with join status indicators
 // color:3 + style:"success" = green on modern Telegram clients
-// Returns an InlineKeyboardButton with a custom emoji prepended via entities.
-// The placeholder character occupies the first codepoint(s) so Telegram
-// Premium users see the animated sticker; non-premium see the fallback Unicode.
-function inlineBtn(label: string, url: string, emojiId: string, fallbackUnicode: string) {
-  const emojiLen = [...fallbackUnicode].length; // correct JS surrogate-pair length
-  return {
-    text:     fallbackUnicode + " " + label,
-    url,
-    color:    3,
-    style:    "success",
-    entities: [{ type: "custom_emoji", offset: 0, length: emojiLen, custom_emoji_id: emojiId }],
-  };
-}
-
 function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_keyboard: any[][] } {
   const rows: any[][] = [];
   for (let i = 0; i < REQUIRED_CHANNELS.length; i += 2) {
@@ -409,28 +395,24 @@ function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_k
     for (let j = i; j < Math.min(i + 2, REQUIRED_CHANNELS.length); j++) {
       const ch = REQUIRED_CHANNELS[j];
       const ok = joined[j];
-      if (ok) {
-        // Joined: premium ✅ before label
-        row.push(inlineBtn(ch.label + " ↗", ch.url, E.check, "✅"));
-      } else {
-        // Not joined: premium 🔗 before label (no checkmark)
-        row.push(inlineBtn(ch.label + " ↗", ch.url, E.link, "🔗"));
-      }
+      // Joined channels get a small-caps tick prefix (plain text only — inline
+      // buttons do not support premium/custom emoji, only reply-keyboard does)
+      row.push({
+        text:  (ok ? "ᴊᴏɪɴᴇᴅ " : "") + ch.label,
+        url:   ch.url,
+        color: 3,
+        style: "success",
+      });
     }
     rows.push(row);
   }
 
-  // "I JOINED" / "ALL JOINED" button — blue (primary) color
-  const joinedLabel = allJoined ? "ᴀʟʟ ᴊᴏɪɴᴇᴅ — ᴇɴᴛᴇʀ ʙᴏᴛ" : "ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ";
-  const joinedEmoji = allJoined ? E.rocket : E.check;
-  const joinedFb    = allJoined ? "🚀" : "✅";
-  const emojiLen    = [...joinedFb].length;
+  // "I JOINED" / "ALL JOINED" button — blue (primary)
   rows.push([{
-    text:          joinedFb + " " + joinedLabel,
+    text:          allJoined ? "ᴀʟʟ ᴊᴏɪɴᴇᴅ — ᴇɴᴛᴇʀ ʙᴏᴛ" : "ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ",
     callback_data: "check_joined",
-    color:         4,          // blue
-    style:         "primary",  // changed from success (green)
-    entities:      [{ type: "custom_emoji", offset: 0, length: emojiLen, custom_emoji_id: joinedEmoji }],
+    color:         4,
+    style:         "primary",
   }]);
   return { inline_keyboard: rows };
 }
