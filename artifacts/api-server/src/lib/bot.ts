@@ -56,6 +56,8 @@ const E = {
   a3:           "4918014360267260850",   // new #3
   a4:           "4915842446845281363",   // new #4
   a5:           "4916086774649848789",   // new #5
+  profile2:     "5269531045165816230",   // profile button
+  search2:      "5893382531037794941",   // search number button
   globe:        "5372849966689566579",   // 🌐
   profile:      "5206318837489743801",   // 👤
   gift:         "5359664288241829619",   // 🎁
@@ -157,6 +159,8 @@ const E_FB: Record<string, string> = {
   "5301096984617166561": "🔄",
   "5445033158456145975": "✦",
   "5445353829304387411": "✦",
+  "5269531045165816230": "✦",
+  "5893382531037794941": "✦",
   "5104966345267610825": "✦",
   "4918014360267260850": "✦",
   "4915842446845281363": "✦",
@@ -226,19 +230,19 @@ function mainMenuKeyboard(): CKeyboard {
   return {
     keyboard: [
       [
-        btn("GET NUMBER",            "success", E.phone),      // 📱
+        btn("GET NUMBER",            "success", E.a2),         // 5104966345267610825
         btn("WEB PANEL",             "primary", E.sparkle),   // new #6 ✨
       ],
       [
         btn("SUPPORT ( DEVELOPER )", "danger",  E.support),   // 🖥
       ],
       [
-        btn("SEARCH NUMBER",         "primary", E.search),    // 🔎
+        btn("SEARCH NUMBER",         "primary", E.search2),   // 5893382531037794941
         btn("BUY CREDIT",            "success", E.buy2),      // new buy ID
       ],
       [
         btn("STATUS",                "primary", E.name),      // 5190806721286657692
-        btn("PROFILE",               "primary", E.profile),   // 👤
+        btn("PROFILE",               "primary", E.profile2),  // 5269531045165816230
       ],
       [
         btn("GIFT CARD",             "success", E.a5),        // new #5
@@ -400,8 +404,32 @@ async function checkMembership(bot: TelegramBot, telegramId: string): Promise<bo
   );
 }
 
-// Build 2×2 inline channel keyboard with join status indicators
-// color:3 + style:"success" = green on modern Telegram clients
+// ─── Inline button with premium emoji via Bot API entities ───────────────────
+// Telegram Bot API 7.0+ supports `entities` on InlineKeyboardButton text.
+// The Unicode fallback char sits at offset 0; the entity overlays the custom
+// emoji sticker on top for Premium users. Non-premium see the plain Unicode.
+function iBtn(opts: {
+  label:    string;
+  emojiId:  string;
+  fallback: string;            // Unicode placeholder e.g. "✅"
+  url?:     string;
+  cb?:      string;
+  color?:   number;
+  style?:   "success" | "danger" | "primary";
+}): any {
+  const emojiLen = [...opts.fallback].length; // surrogate-safe length
+  const btn: any = {
+    text:     opts.fallback + " " + opts.label,
+    color:    opts.color ?? 3,
+    style:    opts.style ?? "success",
+    entities: [{ type: "custom_emoji", offset: 0, length: emojiLen, custom_emoji_id: opts.emojiId }],
+  };
+  if (opts.url) btn.url          = opts.url;
+  if (opts.cb)  btn.callback_data = opts.cb;
+  return btn;
+}
+
+// Build 2×2 inline channel keyboard with join status + premium emoji
 function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_keyboard: any[][] } {
   const rows: any[][] = [];
   for (let i = 0; i < REQUIRED_CHANNELS.length; i += 2) {
@@ -409,23 +437,25 @@ function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_k
     for (let j = i; j < Math.min(i + 2, REQUIRED_CHANNELS.length); j++) {
       const ch = REQUIRED_CHANNELS[j];
       const ok = joined[j];
-      row.push({
-        text:  (ok ? "✅ " : "🔗 ") + ch.label,
-        url:   ch.url,
-        color: 3,
-        style: "success",
-      });
+      row.push(iBtn({
+        label:   ch.label,
+        emojiId: ok ? E.check : E.link,
+        fallback: ok ? "✅" : "🔗",
+        url:     ch.url,
+      }));
     }
     rows.push(row);
   }
 
-  // "I JOINED" / "ALL JOINED" button — blue (primary)
-  rows.push([{
-    text:          allJoined ? "✅ ᴀʟʟ ᴊᴏɪɴᴇᴅ — ᴇɴᴛᴇʀ ʙᴏᴛ" : "✅ ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ",
-    callback_data: "check_joined",
-    color:         4,
-    style:         "primary",
-  }]);
+  // "I JOINED" / "ALL JOINED" — blue
+  rows.push([iBtn({
+    label:   allJoined ? "ᴀʟʟ ᴊᴏɪɴᴇᴅ — ᴇɴᴛᴇʀ ʙᴏᴛ" : "ɪ ᴊᴏɪɴᴇᴅ — ᴄʜᴇᴄᴋ ɴᴏᴡ",
+    emojiId: allJoined ? E.rocket : E.check,
+    fallback: allJoined ? "🚀" : "✅",
+    cb:      "check_joined",
+    color:   4,
+    style:   "primary",
+  })]);
   return { inline_keyboard: rows };
 }
 
