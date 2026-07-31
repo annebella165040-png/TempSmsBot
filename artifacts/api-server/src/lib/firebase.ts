@@ -231,6 +231,46 @@ function parseSmsEntries(data: unknown): FirebaseSmsMessage[] {
   return messages;
 }
 
+// ─── Phone number extraction from SMS text (same logic as HTML panel) ────────
+//
+// The device Firebase node often has NO phoneNumber field.
+// The real number is found inside SMS messages — operator SMSes say things like:
+//   "Your Jio Number is: 9876543210"  or  "Airtel Number: 9876543210"
+// We scan each message text with the same regex set the HTML panel uses.
+
+const PHONE_PATTERNS: RegExp[] = [
+  // Carrier-tagged patterns (highest confidence)
+  /(?:Jio|JIO)\s+(?:mobile\s+)?(?:no\.?|number|num)\s*[:\-]\s*([6-9][0-9]{9})/i,
+  /(?:Airtel|AIRTEL)\s+(?:mobile\s+)?(?:no\.?|number|num)\s*[:\-]\s*([6-9][0-9]{9})/i,
+  /(?:Vi|VI|Vodafone|VODAFONE|Idea|IDEA)\s+(?:mobile\s+)?(?:no\.?|number|num)\s*[:\-]\s*([6-9][0-9]{9})/i,
+  /(?:BSNL|bsnl)\s+(?:mobile\s+)?(?:no\.?|number|num)\s*[:\-]\s*([6-9][0-9]{9})/i,
+  // Generic patterns
+  /(?:your\s+)?(?:mobile|mob\.?|phone|contact)\s+(?:no\.?|number|num)\s*[:\-]\s*(\+?91[-\s]?[6-9][0-9]{9})/i,
+  /(?:your\s+)?(?:mobile|mob\.?|phone|contact)\s+(?:no\.?|number|num)\s*[:\-]\s*([6-9][0-9]{9})/i,
+  /(?:Number|No\.?)\s*[:\-]\s*([6-9][0-9]{9})/i,
+  /registered\s+(?:mobile\s+)?(?:number|no\.?)\s*[:\-]?\s*([6-9][0-9]{9})/i,
+  // +91 prefix
+  /(\+91[-\s]?[6-9][0-9]{9})/,
+  /(?:\b91)([6-9][0-9]{9})\b/,
+  // Last resort — bare 10-digit Indian number at word boundary
+  /(?:^|\s|:)([6-9][0-9]{9})(?:\s|$|\.)/,
+];
+
+export function extractPhoneFromSms(messages: FirebaseSmsMessage[]): string | null {
+  for (const msg of messages) {
+    for (const re of PHONE_PATTERNS) {
+      const match = msg.text.match(re);
+      if (match && match[1]) {
+        const digits = match[1].replace(/[^0-9]/g, "");
+        if (digits.length === 10 && /^[6-9]/.test(digits)) return digits;
+        if (digits.length === 12 && digits.startsWith("91") && /^91[6-9]/.test(digits))
+          return digits.slice(2);
+      }
+    }
+  }
+  return null;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function fetchPanelDevices(
