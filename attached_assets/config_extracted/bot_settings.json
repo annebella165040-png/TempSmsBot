@@ -1,0 +1,13 @@
+{
+    "bot_enabled": true,
+    "firebase_urls": [
+        "https:\/\/raaz-5287d-default-rtdb.firebaseio.com",
+        "https:\/\/ajay-33c1b-default-rtdb.firebaseio.com"
+    ],
+    "disabled_urls": [
+        "https:\/\/raaz-5287d-default-rtdb.firebaseio.com"
+    ],
+    "channels": [
+        "@xearningloot"
+    ]
+}
