@@ -27,3 +27,4 @@ channel = "stable-25_05"
 [userenv.shared]
 BOT_USERNAME = "TBH_VIP_BOT"
 TELEGRAM_BOT_TOKEN = "8859996567:AAE1KgsPHAqWOz-bik0tUUqxXJ7KvJM3N9k"
+ADMIN_PASSWORD = "Papa"
