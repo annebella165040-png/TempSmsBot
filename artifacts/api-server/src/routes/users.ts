@@ -80,6 +80,8 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
   if (parsed.data.webPanelExpiresAt !== undefined) {
     updateData.webPanelExpiresAt = parsed.data.webPanelExpiresAt ? new Date(parsed.data.webPanelExpiresAt) : null;
   }
+  // isBanned — handled outside zod schema
+  if (typeof (req.body as any).isBanned === "boolean") updateData.isBanned = (req.body as any).isBanned;
 
   const [updated] = await db
     .update(botUsersTable)

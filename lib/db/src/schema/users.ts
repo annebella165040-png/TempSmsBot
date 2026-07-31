@@ -14,6 +14,7 @@ export const botUsersTable = pgTable("bot_users", {
   getNumberExpiresAt: timestamp("get_number_expires_at", { withTimezone: true }),
   sendSmsUnlocked: boolean("send_sms_unlocked").notNull().default(false),
   webPanelExpiresAt: timestamp("web_panel_expires_at", { withTimezone: true }),
+  isBanned: boolean("is_banned").notNull().default(false),
   state: text("state").notNull().default("main_menu"),
   stateData: text("state_data"),
   assignedDeviceId: text("assigned_device_id"),
