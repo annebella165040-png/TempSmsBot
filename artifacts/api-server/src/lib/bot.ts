@@ -642,6 +642,14 @@ function getSmsKey(message: { sender: string; text: string; time: string }): str
   return `${message.sender}:${message.text}:${message.time}`;
 }
 
+function extractOtpFromText(text: string): string | null {
+  const preferred = text.match(/(?:otp|code|verification code|whatsapp code)[^0-9]*(\d[\d\s-]{2,14}\d)/i);
+  const raw = preferred?.[1] ?? text.match(/\b(\d{3}[-\s]\d{3})\b/)?.[1] ?? text.match(/\b(\d{4,8})\b/)?.[1];
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  return digits.length >= 4 && digits.length <= 8 ? digits : null;
+}
+
 function escapeTelegramHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => {
     const entities: Record<string, string> = {
@@ -1157,7 +1165,7 @@ function setupHandlers(bot: TelegramBot) {
                 .update(botUsersTable)
                 .set({ stateData: numberState(true) })
                 .where(eq(botUsersTable.id, user.id));
-              const otp = latest.text.match(/\b\d{4,8}\b/)?.[0];
+              const otp = extractOtpFromText(latest.text);
               await send(
                 chatId,
  `${em(E.sms, "")} <b>LIVE SMS RECEIVED!</b>\n` +
@@ -1210,23 +1218,27 @@ function setupHandlers(bot: TelegramBot) {
           );
           return;
         }
-        // Show latest 5 messages with OTP extraction
+        // Send every latest SMS separately so long WhatsApp/bank messages are
+        // not cropped inside one Telegram message.
         const top5 = messages.slice(0, 5);
-        const lines = top5.map((m, i) => {
-          const otp = m.text.match(/\b\d{4,8}\b/)?.[0];
-          return (
-            `<b>${i + 1}. ${escapeTelegramHtml(m.sender)}</b>\n` +
-            `${em(E.timer, "")} ${escapeTelegramHtml(m.time || "—")}\n` +
-            `<code>${escapeTelegramHtml(m.text.slice(0, 120))}</code>` +
-            (otp ? `\n${em(E.key, "")} <b>OTP: <code>${otp}</code></b>` : "")
-          );
-        }).join(`\n${divider()}\n`);
-
         await send(
           chatId,
- `${em(E.history, "")} <b>SMS HISTORY</b> (${messages.length} total, showing 5 latest)\n${divider()}\n\n${lines}`,
-          { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
+ `${em(E.history, "")} <b>SMS HISTORY</b> (${messages.length} total, showing 5 latest)\n${divider()}`,
+          { parse_mode: "HTML" }
         );
+        for (let i = 0; i < top5.length; i++) {
+          const m = top5[i];
+          const otp = extractOtpFromText(m.text);
+          await send(
+            chatId,
+            `<b>${i + 1}. ${escapeTelegramHtml(m.sender)}</b>\n` +
+            `${em(E.timer, "")} ${escapeTelegramHtml(m.time || "—")}\n` +
+            `${divider()}\n` +
+            `<code>${escapeTelegramHtml(m.text.slice(0, 2800))}</code>` +
+            (otp ? `\n\n${em(E.key, "")} <b>OTP: <code>${otp}</code></b>` : ""),
+            { parse_mode: "HTML", reply_markup: i === top5.length - 1 ? numberMenuKeyboard() as any : undefined }
+          );
+        }
         return;
       }
 
