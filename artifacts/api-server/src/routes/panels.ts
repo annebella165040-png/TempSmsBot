@@ -6,6 +6,7 @@ import {
   fetchDeviceSms,
   fetchPanelDevices,
   getLatestSmsTimestamp,
+  sendSmsViaFirebase,
   type FirebaseDevice,
   type FirebaseSmsMessage,
 } from "../lib/firebase";
@@ -257,6 +258,53 @@ router.get("/panels/:id/devices", async (req, res): Promise<void> => {
     panelId: d.panelId,
     panelName: d.panelName,
   })));
+});
+
+router.get("/panels/:id/devices/:deviceId/sms", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const params = GetPanelDevicesParams.safeParse({ id: parseFloat(raw) });
+  const deviceId = String(req.params.deviceId || "").trim();
+  if (!params.success || !deviceId) {
+    res.status(400).json({ error: "Invalid panel or device ID" });
+    return;
+  }
+  const [panel] = await db.select().from(panelsTable).where(eq(panelsTable.id, params.data.id));
+  if (!panel) {
+    res.status(404).json({ error: "Panel not found" });
+    return;
+  }
+  const messages = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, deviceId);
+  res.json({
+    panelId: panel.id,
+    panelName: panel.name,
+    deviceId,
+    total: messages.length,
+    messages: messages.slice(0, 50),
+  });
+});
+
+router.post("/panels/:id/devices/:deviceId/send-sms", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const params = GetPanelDevicesParams.safeParse({ id: parseFloat(raw) });
+  const deviceId = String(req.params.deviceId || "").trim();
+  const to = typeof req.body?.to === "string" ? req.body.to.trim() : "";
+  const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+  const simSlot = Number(req.body?.simSlot || 1);
+  if (!params.success || !deviceId || !to || !message) {
+    res.status(400).json({ error: "Panel, device, number and message are required" });
+    return;
+  }
+  const [panel] = await db.select().from(panelsTable).where(eq(panelsTable.id, params.data.id));
+  if (!panel) {
+    res.status(404).json({ error: "Panel not found" });
+    return;
+  }
+  const ok = await sendSmsViaFirebase(panel.firebaseUrl, panel.secretKey, deviceId, to, message, simSlot || 1);
+  if (!ok) {
+    res.status(502).json({ error: "SMS command failed" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 export default router;
