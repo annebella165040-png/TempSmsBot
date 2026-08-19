@@ -805,18 +805,27 @@ function jsq(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").r
 function countUp(el,t,dur=800){const s=performance.now(),f=parseInt(el.textContent)||0;function step(n){const p=Math.min((n-s)/dur,1),e=1-Math.pow(1-p,3);el.textContent=Math.round(f+(t-f)*e);if(p<1)requestAnimationFrame(step);}requestAnimationFrame(step);}
 
 async function loadDashboard(){
+  const tb=document.getElementById('panel-tbody');
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),20000);
   try{
-    const d=await(await fetch(B+'/api/dashboard')).json();
+    const r=await fetch(B+'/api/dashboard',{signal:ctrl.signal,cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();
     countUp(document.getElementById('s-devices'),d.totalDevices??0);
     countUp(document.getElementById('s-online'),d.onlineDevices??0);
     countUp(document.getElementById('s-offline'),d.offlineDevices??0);
     countUp(document.getElementById('s-users'),d.totalUsers??0);
     countUp(document.getElementById('s-active'),d.activeUsers??0);
     countUp(document.getElementById('s-gifts'),d.totalGiftCards??0);
-    const tb=document.getElementById('panel-tbody');
     if(!d.panelBreakdown?.length){tb.innerHTML='<tr><td colspan="5" class="empty">No panels</td></tr>';return;}
     tb.innerHTML=d.panelBreakdown.map((p,i)=>\`<tr><td class="mono" style="color:var(--dim)">\${i+1}</td><td><b>\${esc(p.panelName)}</b></td><td>\${p.total}</td><td><span class="badge b-on">\${p.online}</span></td><td><span class="badge b-off">\${p.offline}</span></td></tr>\`).join('');
-  }catch{toast('Dashboard load failed',false);}
+  }catch{
+    tb.innerHTML='<tr><td colspan="5" class="empty">Dashboard load failed. Refresh again.</td></tr>';
+    toast('Dashboard load failed',false);
+  }finally{
+    clearTimeout(timer);
+  }
 }
 async function loadPanels(){
   try{
