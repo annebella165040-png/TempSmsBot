@@ -475,6 +475,7 @@ function iBtn(opts: {
   label:   string;
   emojiId: string;
   url?:    string;
+  webAppUrl?: string;
   cb?:     string;
   style?:  "success" | "danger" | "primary";
 }): any {
@@ -484,6 +485,7 @@ function iBtn(opts: {
     icon_custom_emoji_id: opts.emojiId,
   };
   if (opts.url) btn.url           = opts.url;
+  if (opts.webAppUrl) btn.web_app = { url: opts.webAppUrl };
   if (opts.cb)  btn.callback_data  = opts.cb;
   return btn;
 }
@@ -1404,8 +1406,15 @@ function setupHandlers(bot: TelegramBot) {
  `${em(E.check, "")} <b>WEB PANEL ACCESS GRANTED!</b>\n\n` +
           `${em(E.credits, "")} CREDITS: <b>${user.smsCredits}</b>\n` +
           `${em(E.timer, "")} LICENSE VALID: <b>1 MONTH</b>\n` +
-          `${em(E.link, "")} <a href="${webUrl}">CLICK HERE TO OPEN WEB PANEL</a>`,
-          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+          `${em(E.link, "")} NICHE BUTTON SE MINI APP OPEN KARO.`,
+          {
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [
+                [iBtn({ label: "OPEN MINI APP", emojiId: E.panel, webAppUrl: webUrl, style: "primary" })],
+              ],
+            },
+          }
         );
         return;
       }
