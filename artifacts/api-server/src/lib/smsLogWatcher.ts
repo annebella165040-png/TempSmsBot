@@ -34,6 +34,7 @@ const E = {
   note: "6206108815075579644",
   online: "5440621591387980068",
   update: "5436128410609417960",
+  support: "6026056450223116307",
 };
 
 const E_FB: Record<string, string> = {
@@ -47,6 +48,7 @@ const E_FB: Record<string, string> = {
   "6206108815075579644": "🎵",
   "5440621591387980068": "🟢",
   "5436128410609417960": "🔔",
+  "6026056450223116307": "🖥️",
 };
 
 function em(id: string): string {
@@ -114,6 +116,13 @@ function smsLogKeyboard() {
         url: "https://t.me/annebellaiprn",
         style: "primary",
         icon_custom_emoji_id: E.update,
+      },
+    ], [
+      {
+        text: sct("DEVELOPER"),
+        url: "https://t.me/annebella",
+        style: "danger",
+        icon_custom_emoji_id: E.support,
       },
     ]],
   };
