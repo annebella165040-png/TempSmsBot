@@ -2,8 +2,8 @@ import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import adminRouter from "./routes/admin";
 import { logger } from "./lib/logger";
-import { initBot } from "./lib/bot";
 
 const app: Express = express();
 
@@ -30,16 +30,9 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// Railway may probe the service at "/" and bot users open the public domain
+// directly. Keep the admin login available there as well as under /api.
+app.use("/", adminRouter);
 app.use("/api", router);
-
-// Initialize Telegram bot with polling (no webhook needed in dev)
-if (process.env.TELEGRAM_BOT_TOKEN) {
-  try {
-    initBot(false);
-    logger.info("Telegram bot initialized with polling");
-  } catch (err) {
-    logger.error({ err }, "Failed to initialize Telegram bot");
-  }
-}
 
 export default app;

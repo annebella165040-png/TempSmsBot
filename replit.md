@@ -1,20 +1,20 @@
-# [Project name]
+# Temp OTP Telegram Bot
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Telegram bot and admin panel for managing Firebase-backed SMS panels, with PostgreSQL persistence.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm install` — install workspace dependencies
+- `pnpm --filter @workspace/api-server run dev` — run the API server
+- `pnpm run typecheck` — typecheck libraries and workspace packages
+- `pnpm run build` — build the production API bundle
+- `pnpm run db:push` — apply the Drizzle schema to the configured database
+- Required env: `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, and `ADMIN_PASSWORD`
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
+- API: Express 5 + Telegram polling bot
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
@@ -22,24 +22,31 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/api-server/src/lib/bot.ts` — Telegram bot behavior
+- `artifacts/api-server/src/routes/` — API and admin routes
+- `lib/db/src/schema/` — PostgreSQL schema
+- `README.md` — setup, environment variables, and deployment instructions
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Telegram uses polling so the bot can run on Heroku, Railway, or Replit without a webhook endpoint.
+- Firebase panel credentials are stored in PostgreSQL and entered through the authenticated admin panel.
+- The production build targets the API server only; the mockup sandbox remains a development/design artifact.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Telegram number and SMS workflows backed by configured Firebase panels
+- Password-protected admin panel for users, panels, channels, gift cards, broadcasts, and dashboard data
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep deployment instructions and environment requirements in `README.md`.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Never commit `.env`, Telegram tokens, Firebase keys, database URLs, or admin passwords.
+- Heroku runs the database schema push from `Procfile`; Railway requires the one-time `pnpm run db:push` step described in `README.md`.
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- See `README.md` for the complete user-facing project documentation.

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, panelsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { fetchPanelDevices } from "../lib/firebase";
+import { notifyNewPanel } from "../lib/notifications";
 import {
   CreatePanelBody,
   DeletePanelParams,
@@ -36,11 +37,18 @@ router.post("/panels", async (req, res): Promise<void> => {
       secretKey: parsed.data.secretKey,
     })
     .returning();
+
+  const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
+  void notifyNewPanel(panel.name, devices);
+
   res.status(201).json({
     id: panel.id,
     name: panel.name,
     firebaseUrl: panel.firebaseUrl,
     createdAt: panel.createdAt.toISOString(),
+    totalDevices: devices.length,
+    onlineDevices: devices.filter((device) => device.status).length,
+    offlineDevices: devices.filter((device) => !device.status).length,
   });
 });
 

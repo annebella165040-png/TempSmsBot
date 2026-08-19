@@ -18,7 +18,12 @@ function serializeUser(u: typeof botUsersTable.$inferSelect) {
     getNumberExpiresAt: u.getNumberExpiresAt?.toISOString() ?? null,
     sendSmsUnlocked: u.sendSmsUnlocked,
     webPanelExpiresAt: u.webPanelExpiresAt?.toISOString() ?? null,
+    isBanned: u.isBanned,
+    state: u.state,
+    assignedDeviceId: u.assignedDeviceId,
+    assignedPanelId: u.assignedPanelId,
     createdAt: u.createdAt.toISOString(),
+    updatedAt: u.updatedAt.toISOString(),
   };
 }
 

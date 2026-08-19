@@ -9,6 +9,7 @@ export interface FirebaseDevice {
   model: string;
   lastSeen: string | null;
   lastSeenTs: number | null;    // parsed epoch ms — used for "active in last 1hr" filter
+  lastSmsTimestampMs: number | null;
   simCount: number;
   totalSms: number;
   panelId: number;
@@ -100,10 +101,47 @@ function parseTimestamp(raw: unknown): number | null {
     return raw < 1e12 ? raw * 1000 : raw;
   }
   if (typeof raw === "string" && raw.trim()) {
-    const direct = Date.parse(raw);
+    const value = raw.trim();
+    // Firebase SMS data commonly uses the device's Indian local format:
+    // "09-08-2026 | 03:53 am". Parse it explicitly instead of relying on
+    // Date.parse, whose day/month interpretation varies by runtime.
+    const localMatch = value.match(
+      /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})\s*(?:\||T|,)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i,
+    );
+    if (localMatch) {
+      const [, d, mo, y, rawHour, mi, s, meridiem] = localMatch;
+      let hour = Number(rawHour);
+      if (meridiem) {
+        const isPm = meridiem.toLowerCase() === "pm";
+        hour = hour % 12 + (isPm ? 12 : 0);
+      }
+      if (
+        Number(d) >= 1 &&
+        Number(d) <= 31 &&
+        Number(mo) >= 1 &&
+        Number(mo) <= 12 &&
+        hour >= 0 &&
+        hour <= 23
+      ) {
+        // The panel handles Indian mobile numbers, so timestamps without a
+        // timezone are treated as Asia/Kolkata rather than server-local time.
+        const utcMs = Date.UTC(
+          Number(y),
+          Number(mo) - 1,
+          Number(d),
+          hour,
+          Number(mi),
+          Number(s || 0),
+        );
+        const indiaOffsetMs = (5 * 60 + 30) * 60 * 1000;
+        return utcMs - indiaOffsetMs;
+      }
+    }
+
+    const direct = Date.parse(value);
     if (!isNaN(direct)) return direct;
-    // DD/MM/YYYY HH:MM:SS format
-    const m = raw.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+    // DD/MM/YYYY HH:MM:SS format (24-hour fallback)
+    const m = value.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
     if (m) {
       const [, d, mo, y, h, mi, s] = m;
       const ts = new Date(+y, +mo - 1, +d, +h, +mi, +(s || 0)).getTime();
@@ -167,6 +205,15 @@ function parseDevices(
 
     // Count SMS
     const smsRaw = d.sms || d.messages || d.inbox;
+    const embeddedSms = parseSmsEntries(smsRaw);
+    const lastSmsTimestampMs = embeddedSms.reduce<number | null>(
+      (latest, message) =>
+        message.timestampMs !== null &&
+        (latest === null || message.timestampMs > latest)
+          ? message.timestampMs
+          : latest,
+      null,
+    );
     const totalSms =
       smsRaw && typeof smsRaw === "object"
         ? Object.keys(smsRaw).length
@@ -187,6 +234,7 @@ function parseDevices(
       model,
       lastSeen,
       lastSeenTs,
+      lastSmsTimestampMs,
       simCount: sims.length || 1,
       totalSms,
       panelId,
@@ -212,7 +260,7 @@ function parseSmsEntries(data: unknown): FirebaseSmsMessage[] {
     const text = String(m.message || m.body || m.text || "");
     if (!text.trim()) continue;
     const timeStr = String(m.dateTime || m.date || m.time || "");
-    const tsRaw = m.timestamp ?? m.dateTime ?? m.date ?? null;
+    const tsRaw = m.timestamp ?? m.dateTime ?? m.date ?? m.time ?? null;
     const timestampMs = parseTimestamp(tsRaw);
     messages.push({
       text,
@@ -226,9 +274,24 @@ function parseSmsEntries(data: unknown): FirebaseSmsMessage[] {
     if (a.timestampMs !== null && b.timestampMs !== null) {
       return b.timestampMs - a.timestampMs;
     }
+    if (a.timestampMs !== null) return -1;
+    if (b.timestampMs !== null) return 1;
     return 0;
   });
   return messages;
+}
+
+export function getLatestSmsTimestamp(
+  messages: FirebaseSmsMessage[],
+): number | null {
+  return messages.reduce<number | null>(
+    (latest, message) =>
+      message.timestampMs !== null &&
+      (latest === null || message.timestampMs > latest)
+        ? message.timestampMs
+        : latest,
+    null,
+  );
 }
 
 // ─── Phone number extraction from SMS text (same logic as HTML panel) ────────

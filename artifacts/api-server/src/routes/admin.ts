@@ -42,14 +42,39 @@ function clearSessionCookie(res: Response) {
   );
 }
 
-// ── GET /admin ── (protected)
-router.get("/admin", (req, res) => {
+function renderAdmin(req: Request, res: Response) {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   if (!isAuthed(req)) {
     res.send(LOGIN_HTML());
     return;
   }
   res.send(PANEL_HTML);
+}
+
+// Public-root aliases make the panel work from the Railway domain directly.
+router.get("/", renderAdmin);
+router.get("/admin", renderAdmin);
+
+router.get("/admin.webmanifest", (_req, res) => {
+  res.setHeader("Content-Type", "application/manifest+json; charset=utf-8");
+  res.send(JSON.stringify({
+    name: "AnneBella Sms Panel",
+    short_name: "AnneBella",
+    description: "AnneBella SMS admin control panel",
+    start_url: "/admin",
+    scope: "/",
+    display: "standalone",
+    background_color: "#020910",
+    theme_color: "#061530",
+    icons: [
+      { src: "/admin-logo.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" },
+    ],
+  }));
+});
+
+router.get("/admin-logo.svg", (_req, res) => {
+  res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+  res.send(ADMIN_LOGO_SVG);
 });
 
 // ── POST /admin/login ──
@@ -63,7 +88,7 @@ router.post("/admin/login", (req, res) => {
   const token = crypto.randomBytes(32).toString("hex");
   SESSIONS.add(token);
   setSessionCookie(res, token);
-  res.redirect("/api/admin");
+  res.redirect("/admin");
 });
 
 // ── GET /admin/logout ──
@@ -72,10 +97,34 @@ router.get("/admin/logout", (req, res) => {
   const tok = cookies[SESSION_COOKIE];
   if (tok) SESSIONS.delete(tok);
   clearSessionCookie(res);
-  res.redirect("/api/admin");
+  res.redirect("/admin");
 });
 
 export default router;
+
+const ADMIN_LOGO_SVG = /* svg */`<svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="40%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#0d2a52"/>
+      <stop offset="55%" stop-color="#061530"/>
+      <stop offset="100%" stop-color="#040d1f"/>
+    </radialGradient>
+    <linearGradient id="tl" x1="34" y1="40" x2="90" y2="152" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5bb8ff"/>
+      <stop offset="100%" stop-color="#c8eaff"/>
+    </linearGradient>
+    <linearGradient id="tr" x1="158" y1="40" x2="102" y2="152" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a6ecf"/>
+      <stop offset="100%" stop-color="#6ab4f5"/>
+    </linearGradient>
+  </defs>
+  <circle cx="96" cy="96" r="92" fill="url(#bg)" stroke="rgba(80,160,255,0.55)" stroke-width="4"/>
+  <path d="M38 38 L66 38 L99 148 L84 160 Z" fill="url(#tl)"/>
+  <path d="M50 38 L66 38 L99 148 L90 148 Z" fill="#2a8fff" opacity="0.6"/>
+  <path d="M154 38 L126 38 L93 148 L108 160 Z" fill="url(#tr)"/>
+  <path d="M142 38 L126 38 L93 148 L102 148 Z" fill="#1558b0" opacity="0.5"/>
+  <path d="M44 38 L56 38 L88 140 L78 148 Z" fill="white" opacity="0.15"/>
+</svg>`;
 
 // ══════════════════════════════════════════════════
 //  LOGIN PAGE
@@ -87,6 +136,9 @@ function LOGIN_HTML(error = "") {
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <title>AnneBella — Admin Login</title>
+<link rel="manifest" href="/admin.webmanifest"/>
+<link rel="icon" href="/admin-logo.svg" type="image/svg+xml"/>
+<link rel="apple-touch-icon" href="/admin-logo.svg"/>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -108,20 +160,15 @@ canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
 .logo-hex-wrap{position:relative;width:60px;height:60px}
 .logo-hex{
   width:60px;height:60px;
-  background:linear-gradient(135deg,var(--c),var(--c2));
-  clip-path:polygon(50% 0%,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);
+  background:radial-gradient(ellipse at 40% 30%,#0d2a52 0%,#061530 50%,#040d1f 100%);
+  border:1.5px solid rgba(80,160,255,.35);
+  border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  font-family:'Orbitron',sans-serif;font-size:22px;font-weight:900;color:#020910;
+  overflow:hidden;position:relative;
   animation:logo-pulse 3s ease-in-out infinite;
 }
-@keyframes logo-pulse{0%,100%{filter:drop-shadow(0 0 8px rgba(0,229,200,.6))}50%{filter:drop-shadow(0 0 16px rgba(0,229,200,.9))}}
-.logo-ring{
-  position:absolute;inset:-6px;
-  clip-path:polygon(50% 0%,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);
-  background:conic-gradient(from 0deg,transparent 55%,var(--c) 75%,transparent 100%);
-  animation:ring-spin 3s linear infinite;
-}
-@keyframes ring-spin{to{transform:rotate(360deg)}}
+@keyframes logo-pulse{0%,100%{box-shadow:0 0 14px rgba(50,120,255,.35),0 0 28px rgba(30,80,200,.2)}50%{box-shadow:0 0 24px rgba(80,160,255,.65),0 0 44px rgba(50,120,255,.35)}}
+.logo-mark{width:30px;height:24px;position:relative;z-index:1}
 .logo-title{
   font-family:'Orbitron',sans-serif;font-size:1.05rem;font-weight:900;
   letter-spacing:3px;text-transform:uppercase;
@@ -198,8 +245,19 @@ label{display:block;font-size:.65rem;color:rgba(0,229,200,.5);letter-spacing:1px
 <div class="login-wrap">
   <div class="logo-area">
     <div class="logo-hex-wrap">
-      <div class="logo-hex">A</div>
-      <div class="logo-ring"></div>
+      <div class="logo-hex">
+        <svg class="logo-mark" viewBox="0 0 90 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="ab-login-tl" x1="0" y1="0" x2="45" y2="72" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#5bb8ff"/><stop offset="100%" stop-color="#c8eaff"/></linearGradient>
+            <linearGradient id="ab-login-tr" x1="90" y1="0" x2="45" y2="72" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#1a6ecf"/><stop offset="100%" stop-color="#6ab4f5"/></linearGradient>
+          </defs>
+          <path d="M2 2 L26 2 L47 62 L36 72 Z" fill="url(#ab-login-tl)"/>
+          <path d="M12 2 L26 2 L47 62 L40 62 Z" fill="#2a8fff" opacity=".6"/>
+          <path d="M88 2 L64 2 L43 62 L54 72 Z" fill="url(#ab-login-tr)"/>
+          <path d="M78 2 L64 2 L43 62 L50 62 Z" fill="#1558b0" opacity=".5"/>
+          <path d="M6 2 L16 2 L37 58 L30 62 Z" fill="white" opacity=".15"/>
+        </svg>
+      </div>
     </div>
     <div class="logo-title">AnneBella Panel</div>
     <div class="logo-sub">Admin Access Only</div>
@@ -208,7 +266,7 @@ label{display:block;font-size:.65rem;color:rgba(0,229,200,.5);letter-spacing:1px
   <div class="card">
     <div class="card-title">🔐 Secure Login</div>
     ${error ? `<div class="error-msg"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${error}</div>` : ""}
-    <form method="POST" action="/api/admin/login" autocomplete="off">
+    <form method="POST" action="/admin/login" autocomplete="off">
       <div>
         <label for="pw">Password</label>
         <div class="input-wrap">
@@ -285,6 +343,9 @@ const PANEL_HTML = /* html */`<!DOCTYPE html>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
 <title>AnneBella — Admin Panel</title>
+<link rel="manifest" href="/admin.webmanifest"/>
+<link rel="icon" href="/admin-logo.svg" type="image/svg+xml"/>
+<link rel="apple-touch-icon" href="/admin-logo.svg"/>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -308,15 +369,14 @@ body{font-family:'Share Tech Mono',monospace;background:var(--dark);color:var(--
 .logo-wrap{position:relative;width:36px;height:36px;flex-shrink:0}
 .logo-hex{
   width:36px;height:36px;
-  background:linear-gradient(135deg,var(--c),var(--c2));
-  clip-path:polygon(50% 0%,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);
+  background:radial-gradient(ellipse at 40% 30%,#0d2a52 0%,#061530 50%,#040d1f 100%);
+  border:1.5px solid rgba(80,160,255,.35);
+  border-radius:50%;
   display:flex;align-items:center;justify-content:center;
+  overflow:hidden;position:relative;
   animation:logo-pulse 3s ease-in-out infinite;
 }
-@keyframes logo-pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,229,200,.4)}50%{box-shadow:0 0 0 8px rgba(0,229,200,0)}}
-.logo-letter{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:900;color:#020910}
-.logo-ring{position:absolute;inset:-4px;clip-path:polygon(50% 0%,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);background:conic-gradient(from 0deg,transparent 60%,var(--c) 80%,transparent 100%);animation:ring-spin 4s linear infinite}
-@keyframes ring-spin{to{transform:rotate(360deg)}}
+.logo-wrap .logo-mark{width:18px;height:14px}
 .brand-col{flex:1;min-width:0}
 .brand-name{font-family:'Orbitron',sans-serif;font-size:.78rem;font-weight:900;color:transparent;background:linear-gradient(90deg,var(--c),var(--c2),var(--c));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;animation:gradient-shift 4s linear infinite;letter-spacing:2px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @keyframes gradient-shift{0%{background-position:0% 50%}100%{background-position:200% 50%}}
@@ -457,6 +517,11 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
 /* ── MISC ── */
 .search-row{display:flex;gap:8px;margin-bottom:12px}
 .search-row input{flex:1}
+.quick-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}
+@media(min-width:760px){.quick-actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.user-actions{display:flex;gap:4px;flex-wrap:wrap;min-width:240px}
+.access-line{display:flex;gap:4px;flex-wrap:wrap}
+.credit-cell{font-family:'Orbitron',sans-serif;color:var(--c);font-weight:700;text-shadow:0 0 10px rgba(0,229,200,.25)}
 .empty{color:var(--dim);text-align:center;padding:28px 0;font-size:.78rem}
 .ch-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid rgba(0,229,200,.05)}
 .ch-item:last-child{border-bottom:none}
@@ -479,8 +544,18 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
 <!-- HEADER -->
 <div id="header">
   <div class="logo-wrap">
-    <div class="logo-hex"><span class="logo-letter">A</span></div>
-    <div class="logo-ring"></div>
+    <div class="logo-hex">
+      <svg class="logo-mark" viewBox="0 0 90 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="ab-head-tl" x1="0" y1="0" x2="45" y2="72" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#5bb8ff"/><stop offset="100%" stop-color="#c8eaff"/></linearGradient>
+          <linearGradient id="ab-head-tr" x1="90" y1="0" x2="45" y2="72" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#1a6ecf"/><stop offset="100%" stop-color="#6ab4f5"/></linearGradient>
+        </defs>
+        <path d="M2 2 L26 2 L47 62 L36 72 Z" fill="url(#ab-head-tl)"/>
+        <path d="M12 2 L26 2 L47 62 L40 62 Z" fill="#2a8fff" opacity=".6"/>
+        <path d="M88 2 L64 2 L43 62 L54 72 Z" fill="url(#ab-head-tr)"/>
+        <path d="M78 2 L64 2 L43 62 L50 62 Z" fill="#1558b0" opacity=".5"/>
+      </svg>
+    </div>
   </div>
   <div class="brand-col">
     <div class="brand-name">AnneBella Panel</div>
@@ -491,7 +566,7 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
     Dashboard
   </div>
   <div class="live-pill"><div class="live-dot"></div><span class="live-txt">LIVE</span></div>
-  <a href="/api/admin/logout" class="logout-btn">
+  <a href="/admin/logout" class="logout-btn">
     <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     Logout
   </a>
@@ -554,9 +629,15 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
       <!-- USERS -->
       <div class="section" id="tab-users">
         <div class="search-row"><input id="u-search" placeholder="Search name, @username, Telegram ID…" oninput="searchUsers()"/><button class="btn btn-primary" onclick="loadUsers()"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button></div>
+        <div class="quick-actions">
+          <button class="btn btn-primary" onclick="exportUsers()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV</button>
+          <button class="btn btn-success" onclick="bulkCredits('add')"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Bulk Add</button>
+          <button class="btn btn-primary" onclick="bulkCredits('set')"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Bulk Set</button>
+          <button class="btn btn-danger" onclick="clearUserSearch()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Clear Filter</button>
+        </div>
         <div class="card">
           <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Bot Users</span><span id="user-count" style="color:var(--dim);font-size:.7rem"></span></div>
-          <div class="card-body" style="padding:0"><div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>TG ID</th><th>Credits</th><th>Refs</th><th>Status</th><th>Actions</th></tr></thead><tbody id="users-tbody"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody></table></div></div>
+          <div class="card-body" style="padding:0"><div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>TG ID</th><th>Credits</th><th>Access</th><th>Refs</th><th>Status</th><th>Actions</th></tr></thead><tbody id="users-tbody"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody></table></div></div>
         </div>
       </div>
 
@@ -691,20 +772,31 @@ async function addPanel(){
   const name=document.getElementById('p-name').value.trim(),url=document.getElementById('p-url').value.trim(),secret=document.getElementById('p-secret').value.trim();
   if(!name||!url||!secret){toast('All fields required',false);return;}
   const sp=document.getElementById('p-spin');sp.style.display='';
-  try{const r=await fetch(B+'/api/panels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,firebaseUrl:url,secretKey:secret})});if(r.ok){toast('Panel added ✓');['p-name','p-url','p-secret'].forEach(id=>document.getElementById(id).value='');loadPanels();loadDashboard();}else{const e=await r.json();toast('Error: '+(e.error||r.status),false);}}catch{toast('Network error',false);}finally{sp.style.display='none';}
+  try{const r=await fetch(B+'/api/panels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,firebaseUrl:url,secretKey:secret})});if(r.ok){const d=await r.json();toast('Panel added: '+(d.totalDevices??0)+' total / '+(d.onlineDevices??0)+' online');['p-name','p-url','p-secret'].forEach(id=>document.getElementById(id).value='');loadPanels();loadDashboard();}else{const e=await r.json();toast('Error: '+(e.error||r.status),false);}}catch{toast('Network error',false);}finally{sp.style.display='none';}
 }
 async function delPanel(id,btn){if(!confirm('Delete this panel?'))return;btn.disabled=true;try{const r=await fetch(B+'/api/panels/'+id,{method:'DELETE'});if(r.ok){toast('Deleted');loadPanels();loadDashboard();}else toast('Failed',false);}catch{toast('Error',false);}finally{btn.disabled=false;}}
 let _all=[];
 async function loadUsers(){try{_all=await(await fetch(B+'/api/users')).json();renderUsers(_all);}catch{toast('Users load failed',false);}}
 function searchUsers(){const q=document.getElementById('u-search').value.toLowerCase();renderUsers(_all.filter(u=>(u.firstName||'').toLowerCase().includes(q)||(u.username||'').toLowerCase().includes(q)||(u.telegramId||'').includes(q)));}
+function clearUserSearch(){document.getElementById('u-search').value='';renderUsers(_all);}
+function filteredUsers(){const q=document.getElementById('u-search').value.toLowerCase();return _all.filter(u=>(u.firstName||'').toLowerCase().includes(q)||(u.username||'').toLowerCase().includes(q)||(u.telegramId||'').includes(q));}
+function fmtDate(v){return v?new Date(v).toLocaleDateString():'—';}
+function isFuture(v){return !!v&&new Date(v)>new Date();}
 function renderUsers(users){
   document.getElementById('user-count').textContent=users.length+' users';
   const tb=document.getElementById('users-tbody');
-  if(!users.length){tb.innerHTML='<tr><td colspan="7" class="empty">No users</td></tr>';return;}
-  tb.innerHTML=users.map((u,i)=>{const banned=u.isBanned,active=u.getNumberExpiresAt&&new Date(u.getNumberExpiresAt)>new Date();return\`<tr><td class="mono" style="color:var(--dim)">\${i+1}</td><td><div style="font-size:.82rem;font-weight:700">\${esc(u.firstName)}</div><div style="color:var(--dim);font-size:.68rem">\${u.username?'@'+esc(u.username):''}</div></td><td class="mono">\${esc(u.telegramId)}</td><td style="color:var(--c);font-weight:700">\${u.smsCredits||0}</td><td style="color:var(--dim)">\${u.referralCount||0}</td><td><span class="badge \${banned?'b-ban':active?'b-active':'b-off'}">\${banned?'Banned':active?'Active':'Inactive'}</span></td><td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-sm \${banned?'btn-success':'btn-danger'}" onclick="toggleBan(\${u.id},\${!!banned},this)">\${banned?'Unban':'Ban'}</button><button class="btn btn-primary btn-sm" onclick="addCredits(\${u.id})">+Cr</button></div></td></tr>\`}).join('');
+  if(!users.length){tb.innerHTML='<tr><td colspan="8" class="empty">No users</td></tr>';return;}
+  tb.innerHTML=users.map((u,i)=>{const banned=!!u.isBanned,numberActive=isFuture(u.getNumberExpiresAt),webActive=isFuture(u.webPanelExpiresAt),sms=!!u.sendSmsUnlocked;return\`<tr><td class="mono" style="color:var(--dim)">\${i+1}</td><td><div style="font-size:.82rem;font-weight:700">\${esc(u.firstName)}</div><div style="color:var(--dim);font-size:.68rem">\${u.username?'@'+esc(u.username):'No username'}</div></td><td class="mono">\${esc(u.telegramId)}</td><td class="credit-cell">\${u.smsCredits||0}</td><td><div class="access-line"><span class="badge \${numberActive?'b-active':'b-off'}">Number \${numberActive?'On':'Off'}</span><span class="badge \${webActive?'b-active':'b-off'}">Web \${webActive?'On':'Off'}</span><span class="badge \${sms?'b-active':'b-off'}">SMS \${sms?'On':'Off'}</span></div></td><td style="color:var(--dim)">\${u.referralCount||0}</td><td><span class="badge \${banned?'b-ban':numberActive||webActive||sms?'b-active':'b-off'}">\${banned?'Banned':numberActive||webActive||sms?'Active':'Inactive'}</span></td><td><div class="user-actions"><button class="btn btn-primary btn-sm" onclick="adjustCredits(\${u.id},'add')">+Cr</button><button class="btn btn-primary btn-sm" onclick="adjustCredits(\${u.id},'set')">Set</button><button class="btn btn-danger btn-sm" onclick="adjustCredits(\${u.id},'deduct')">-Cr</button><button class="btn btn-success btn-sm" onclick="grantNumber(\${u.id})">Number</button><button class="btn btn-success btn-sm" onclick="toggleSms(\${u.id},\${sms})">\${sms?'Lock SMS':'SMS'}</button><button class="btn btn-success btn-sm" onclick="grantWeb(\${u.id})">Web</button><button class="btn btn-sm \${banned?'btn-success':'btn-danger'}" onclick="toggleBan(\${u.id},\${banned},this)">\${banned?'Unban':'Ban'}</button><button class="btn btn-primary btn-sm" onclick="copyUser(\${u.id})">Copy</button></div></td></tr>\`}).join('');
 }
 async function toggleBan(id,isBanned,btn){btn.disabled=true;try{const r=await fetch(B+'/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({isBanned:!isBanned})});if(r.ok){toast(isBanned?'Unbanned':'Banned ✓');loadUsers();}else toast('Failed',false);}catch{toast('Error',false);}finally{btn.disabled=false;}}
-async function addCredits(id){const amt=parseInt(prompt('Add SMS Credits:'));if(isNaN(amt)||amt<=0)return;const u=_all.find(x=>x.id===id);try{const r=await fetch(B+'/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({smsCredits:(u?.smsCredits||0)+amt})});if(r.ok){toast('+'+amt+' credits');loadUsers();}else toast('Failed',false);}catch{toast('Error',false);}}
+async function patchUser(id,data,msg='Updated'){try{const r=await fetch(B+'/api/users/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(r.ok){toast(msg);await loadUsers();return true;}toast('Failed',false);return false;}catch{toast('Error',false);return false;}}
+async function adjustCredits(id,mode){const u=_all.find(x=>x.id===id);if(!u)return;const label=mode==='set'?'Set total credits':mode==='deduct'?'Deduct credits':'Add credits';const amt=parseInt(prompt(label+' for '+(u.firstName||u.telegramId)+':'));if(isNaN(amt)||amt<0)return;const next=mode==='set'?amt:mode==='deduct'?Math.max(0,(u.smsCredits||0)-amt):(u.smsCredits||0)+amt;await patchUser(id,{smsCredits:next},'Credits: '+(u.smsCredits||0)+' → '+next);}
+async function toggleSms(id,current){await patchUser(id,{sendSmsUnlocked:!current},current?'SMS locked':'SMS unlocked');}
+async function grantNumber(id){const hours=parseInt(prompt('Grant Get Number access for how many hours?', '12'));if(isNaN(hours)||hours<=0)return;const until=new Date(Date.now()+hours*3600000).toISOString();await patchUser(id,{getNumberExpiresAt:until},'Number access granted until '+fmtDate(until));}
+async function grantWeb(id){const days=parseInt(prompt('Grant web panel for how many days?', '30'));if(isNaN(days)||days<=0)return;const until=new Date(Date.now()+days*86400000).toISOString();await patchUser(id,{webPanelExpiresAt:until},'Web panel granted until '+fmtDate(until));}
+async function copyUser(id){const u=_all.find(x=>x.id===id);if(!u)return;const text=['AnneBella User','Name: '+(u.firstName||''),'Username: '+(u.username?'@'+u.username:'N/A'),'Telegram ID: '+u.telegramId,'Credits: '+(u.smsCredits||0),'Refs: '+(u.referralCount||0),'SMS: '+(u.sendSmsUnlocked?'Unlocked':'Locked'),'Web: '+fmtDate(u.webPanelExpiresAt),'Banned: '+(u.isBanned?'Yes':'No')].join('\\n');try{await navigator.clipboard.writeText(text);toast('User copied');}catch{prompt('Copy user details:',text);}}
+function exportUsers(){const rows=filteredUsers();const header=['Name','Username','Telegram ID','Credits','Refs','SMS','Web Expires','Number Expires','Banned','Joined'];const csv=[header].concat(rows.map(u=>[u.firstName||'',u.username||'',u.telegramId,u.smsCredits||0,u.referralCount||0,u.sendSmsUnlocked?'yes':'no',u.webPanelExpiresAt||'',u.getNumberExpiresAt||'',u.isBanned?'yes':'no',u.createdAt||''])).map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='annebella-users.csv';a.click();URL.revokeObjectURL(a.href);toast('CSV exported');}
+async function bulkCredits(mode){const rows=filteredUsers();if(!rows.length){toast('No users selected',false);return;}const amt=parseInt(prompt((mode==='set'?'Set':'Add')+' credits for '+rows.length+' filtered users:'));if(isNaN(amt)||amt<0)return;if(!confirm((mode==='set'?'Set ':'Add ')+amt+' credits for '+rows.length+' users?'))return;let ok=0;for(const u of rows){const next=mode==='set'?amt:(u.smsCredits||0)+amt;const r=await fetch(B+'/api/users/'+u.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({smsCredits:next})});if(r.ok)ok++;}toast('Updated '+ok+'/'+rows.length+' users');loadUsers();}
 function genCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<12;i++){if(i&&i%4===0)s+='-';s+=c[Math.floor(Math.random()*c.length)];}document.getElementById('gc-code').value=s;}
 async function createGiftCard(){let code=document.getElementById('gc-code').value.trim();const type=document.getElementById('gc-type').value,value=parseInt(document.getElementById('gc-value').value);if(!code||isNaN(value)||value<=0){toast('Fill all fields',false);return;}if(code.toUpperCase()==='AUTO'){genCode();code=document.getElementById('gc-code').value;}const sp=document.getElementById('gc-spin');sp.style.display='';try{const r=await fetch(B+'/api/gift-cards',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,type,value})});if(r.ok){const c2=await r.json();toast('Card: '+c2.code);['gc-code','gc-value'].forEach(id=>document.getElementById(id).value='');loadGiftCards();}else{const e=await r.json();toast(e.error||'Error',false);}}catch{toast('Error',false);}finally{sp.style.display='none';}}
 async function loadGiftCards(){try{const cards=await(await fetch(B+'/api/gift-cards')).json();const tb=document.getElementById('gc-tbody');if(!cards.length){tb.innerHTML='<tr><td colspan="7" class="empty">No cards</td></tr>';return;}tb.innerHTML=cards.map(c=>\`<tr><td class="mono" style="color:var(--c);letter-spacing:2px">\${esc(c.code)}</td><td><span class="badge b-active">\${c.type}</span></td><td>\${c.value} \${c.type==='hours'?'hrs':'cr'}</td><td><span class="badge \${c.usedBy?'b-used':'b-free'}">\${c.usedBy?'Used':'Free'}</span></td><td class="mono" style="color:var(--dim);font-size:.7rem">\${esc(c.usedBy||'—')}</td><td style="color:var(--dim);font-size:.72rem">\${new Date(c.createdAt).toLocaleDateString()}</td><td>\${!c.usedBy?'<button class="btn btn-danger btn-sm" onclick="delCard('+c.id+',this)"><svg viewBox="0 0 24 24" width="11" height="11"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14"/></svg></button>':'—'}</td></tr>\`).join('');}catch{toast('Load failed',false);}}

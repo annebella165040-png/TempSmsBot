@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, giftCardsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { CreateGiftCardBody, DeleteGiftCardParams } from "@workspace/api-zod";
+import { notifyGiftCardCreated } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -36,6 +37,7 @@ router.post("/gift-cards", async (req, res): Promise<void> => {
       value: String(parsed.data.value),
     })
     .returning();
+  void notifyGiftCardCreated(card.code, card.type, parseInt(card.value, 10));
   res.status(201).json(serializeCard(card));
 });
 
