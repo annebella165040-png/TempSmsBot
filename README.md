@@ -1,17 +1,21 @@
-# Temp OTP Telegram Bot
+# AnneBella Temp SMS Bot
 
-A Node.js Telegram bot and web admin panel for managing configured Firebase-backed SMS panels. The project stores bot users, panels, referrals, gift cards, and related state in PostgreSQL.
+A Node.js Telegram bot and installable web admin panel for managing Firebase-backed Indian virtual SMS numbers. The project stores users, credits, referrals, Firebase panels, gift cards, SMS log dedupe state, and admin data in PostgreSQL.
 
 [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/annebellamonk/New-repo-temp-otp-bot)
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/annebellamonk/New-repo-temp-otp-bot)
 
 ## Features
 
-- Telegram bot with polling mode for local and hosted deployments
-- Password-protected admin panel at `/admin/login`
-- PostgreSQL persistence through Drizzle ORM
-- Firebase Realtime Database panel management
-- User, referral, gift card, dashboard, broadcast, and channel management routes
+- Telegram bot with force-join verification, premium emoji styling, small-caps button labels, and polling mode
+- 100 free signup credits, 5-credit number purchases, 20-credit referral rewards, and 1000-credit web-panel access
+- Automatic refund when a purchased number is cancelled before any live SMS arrives
+- UPI QR credit purchase flow with user screenshot submission and owner approve/decline actions
+- Password-protected admin panel at `/admin/login`, with PWA install support and logo manifest
+- Admin tools for users, credits, bans, web/SMS access, panels, gift cards, broadcasts, and channel settings
+- Firebase Realtime Database panel management with user notifications when new Indian numbers are added
+- Live SMS log forwarding to a Telegram group with wave-line format, premium emoji, small-caps text, and action buttons
+- Parallel SMS log scanning across all configured Firebase panels, plus PostgreSQL dedupe/retry state to avoid repeat logs
 - Health endpoint at `/api/healthz`
 - Production build using esbuild
 
@@ -43,6 +47,9 @@ Copy `.env.example` to `.env` for local development and set:
 | `NEON_DATABASE_URL` | Optional | Replit demo fallback for a Neon PostgreSQL connection |
 | `BOT_USERNAME` | No | Bot username without `@`; defaults to `AnneBella_Sms_Panel_Bot` in code |
 | `PUBLIC_APP_URL` | No | Public HTTPS URL used for Telegram web-panel links; Railway can use `RAILWAY_PUBLIC_DOMAIN` automatically |
+| `OWNER_CHAT_ID` / `ADMIN_CHAT_ID` | Recommended | Owner/admin Telegram chat ID for payment approval notifications |
+| `SMS_LOG_GROUP_ID` | No | Telegram group ID for live SMS logs; defaults to the configured AnneBella logs group |
+| `SMS_LOG_GET_NUMBER_URL` | No | URL used by the SMS log `GET NUMBER` button; defaults to `https://t.me/Annebellasmsbot?start=promo` |
 | `NODE_ENV` | No | Use `production` on hosted services |
 | `LOG_LEVEL` | No | Pino log level; defaults to `info` |
 | `PORT` | No | Supplied automatically by Heroku, Railway, and Replit |
@@ -77,6 +84,24 @@ Expected response:
 Open `/admin/login` on the deployed service and sign in with `ADMIN_PASSWORD`. After signing in, configure Firebase panels and channels from the admin interface.
 
 Use a strong, unique admin password. The default fallback in source code is intended only as a development safeguard and should never be relied on in production.
+
+The admin panel can be installed from Chrome/Android as a PWA. Use it to add Firebase URLs, monitor total/online/offline numbers, grant or deduct credits, unlock user access, generate gift cards, approve credit payments, and broadcast notifications to bot users.
+
+## Telegram Bot Flow
+
+- New users receive 100 credits automatically.
+- Getting a number costs 5 credits.
+- Cancelling before any live SMS arrives refunds the 5 credits.
+- If a live SMS arrives on the number, the purchase is considered used and no refund is issued.
+- Referral rewards add 20 credits to the referrer.
+- Web-panel access requires 1000 credits.
+- Credit purchases show a UPI QR, then the user sends a screenshot for owner approval.
+
+## Live SMS Logs
+
+Set `SMS_LOG_GROUP_ID` to the Telegram group where live SMS logs should be forwarded. The watcher scans all Firebase panels in parallel every 15 seconds, reads online devices, and forwards genuinely new live SMS messages to the group.
+
+Old SMS messages are seeded on startup so deploys do not spam historical logs. Sent SMS keys are stored in PostgreSQL, so the same SMS is not repeated after restart. If Telegram sending fails, the SMS stays pending and is retried on a later poll.
 
 ## Deploy to Heroku
 
