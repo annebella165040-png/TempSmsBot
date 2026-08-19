@@ -140,6 +140,11 @@ router.post("/panels/bulk", async (req, res): Promise<void> => {
   });
 });
 
+router.delete("/panels", async (_req, res): Promise<void> => {
+  const deleted = await db.delete(panelsTable).returning({ id: panelsTable.id });
+  res.json({ deleted: deleted.length });
+});
+
 router.delete("/panels/:id", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = DeletePanelParams.safeParse({ id: parseFloat(raw) });
