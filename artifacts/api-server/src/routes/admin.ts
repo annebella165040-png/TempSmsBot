@@ -77,7 +77,7 @@ router.get("/admin-sw.js", (_req, res) => {
   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
   res.setHeader("Service-Worker-Allowed", "/");
   res.send(`
-const CACHE_NAME = "annebella-admin-v3";
+const CACHE_NAME = "annebella-admin-v4";
 const CORE = ["/admin", "/admin.webmanifest", "/admin-logo.svg"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
@@ -598,7 +598,6 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
   <nav id="sidebar">
     <div class="nav-item active" data-tab="dashboard"><div class="nav-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><span class="nav-label">Dashboard</span></div>
     <div class="nav-item" data-tab="panels"><div class="nav-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><span class="nav-label">Panels</span></div>
-    <div class="nav-item" data-tab="smsconsole"><div class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/></svg></div><span class="nav-label">SMS Console</span></div>
     <div class="nav-divider"></div>
     <div class="nav-item" data-tab="users"><div class="nav-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><span class="nav-label">Users</span></div>
     <div class="nav-item" data-tab="giftcards"><div class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div><span class="nav-label">Gift Cards</span></div>
@@ -656,28 +655,6 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
         <div class="card">
           <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Registered Panels</span></div>
           <div class="card-body" style="padding:0"><div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Firebase URL</th><th>Added</th><th>Action</th></tr></thead><tbody id="panels-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
-        </div>
-      </div>
-
-      <!-- SMS CONSOLE -->
-      <div class="section" id="tab-smsconsole">
-        <div class="search-row"><input id="sms-search" placeholder="Search number, OTP, sender, device, panel, message…" onkeydown="if(event.key==='Enter')loadSmsConsole()"/><button class="btn btn-primary" onclick="loadSmsConsole()"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button><button class="btn btn-success" onclick="loadSmsConsole(true)"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>OTP</button></div>
-        <div class="card">
-          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send SMS / OTP</span></div>
-          <div class="card-body">
-            <div class="form-grid c3">
-              <div class="form-group"><label>Panel ID</label><input id="sms-panel-id" placeholder="Panel ID"/></div>
-              <div class="form-group"><label>Device ID</label><input id="sms-device-id" placeholder="Device ID"/></div>
-              <div class="form-group"><label>To Number</label><input id="sms-to" placeholder="9876543210"/></div>
-              <div class="form-group"><label>SIM Slot</label><input id="sms-sim" type="number" value="1"/></div>
-              <div class="form-group" style="grid-column:span 2"><label>Message / OTP</label><input id="sms-message" placeholder="Your OTP is 123456"/></div>
-            </div>
-            <button class="btn btn-primary btn-full" onclick="sendConsoleSms()"><span id="sms-send-spin" style="display:none" class="spin"></span><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send Command</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>Live SMS Inbox</span><span id="sms-count" style="color:var(--dim);font-size:.7rem"></span></div>
-          <div class="card-body" style="padding:0"><div class="tbl-wrap"><table><thead><tr><th>Time</th><th>Panel</th><th>Device</th><th>Number</th><th>Sender</th><th>OTP</th><th>Message</th><th>Action</th></tr></thead><tbody id="sms-tbody"><tr><td colspan="8" class="empty">Search or refresh SMS console</td></tr></tbody></table></div></div>
         </div>
       </div>
 
@@ -766,7 +743,6 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
 <div id="bnav">
   <div class="bnav-item active" data-tab="dashboard"><div class="bnav-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><span class="bnav-label">Stats</span></div>
   <div class="bnav-item" data-tab="panels"><div class="bnav-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><span class="bnav-label">Panels</span></div>
-  <div class="bnav-item" data-tab="smsconsole"><div class="bnav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg></div><span class="bnav-label">SMS</span></div>
   <div class="bnav-item" data-tab="users"><div class="bnav-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><span class="bnav-label">Users</span></div>
   <div class="bnav-item" data-tab="giftcards"><div class="bnav-icon"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/></svg></div><span class="bnav-label">Gifts</span></div>
   <div class="bnav-item" data-tab="broadcast"><div class="bnav-icon"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div><span class="bnav-label">Broadcast</span></div>
@@ -786,15 +762,14 @@ function toast(msg,ok=true){
 }
 function tick(){document.getElementById('foot-time').textContent=new Date().toLocaleTimeString('en-GB');}
 setInterval(tick,1000);tick();
-const TAB_ICONS={dashboard:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',panels:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',smsconsole:'<path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M8 9h8M8 13h5"/>',users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',giftcards:'<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/>',broadcast:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',channels:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'};
-const TAB_TITLES={dashboard:'Dashboard',panels:'Firebase Panels',smsconsole:'SMS Console',users:'Bot Users',giftcards:'Gift Cards',broadcast:'Broadcast',channels:'Channels'};
+const TAB_ICONS={dashboard:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',panels:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',giftcards:'<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/>',broadcast:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',channels:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'};
+const TAB_TITLES={dashboard:'Dashboard',panels:'Firebase Panels',users:'Bot Users',giftcards:'Gift Cards',broadcast:'Broadcast',channels:'Channels'};
 function switchTab(tab){
   document.querySelectorAll('.nav-item,.bnav-item').forEach(n=>n.classList.toggle('active',n.dataset.tab===tab));
   document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='tab-'+tab));
   document.getElementById('desk-title').innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+TAB_ICONS[tab]+'</svg>'+TAB_TITLES[tab];
   if(tab==='dashboard')loadDashboard();
   if(tab==='panels')loadPanels();
-  if(tab==='smsconsole')loadSmsConsole();
   if(tab==='users')loadUsers();
   if(tab==='giftcards')loadGiftCards();
   if(tab==='channels')loadChannels();
@@ -855,25 +830,6 @@ async function addBulkPanels(){
   }catch{toast('Network error',false);}finally{sp.style.display='none';}
 }
 async function delPanel(id,btn){if(!confirm('Delete this panel?'))return;btn.disabled=true;try{const r=await fetch(B+'/api/panels/'+id,{method:'DELETE'});if(r.ok){toast('Deleted');loadPanels();loadDashboard();}else toast('Failed',false);}catch{toast('Error',false);}finally{btn.disabled=false;}}
-async function loadSmsConsole(otpOnly=false){
-  const q=document.getElementById('sms-search').value.trim();
-  const tb=document.getElementById('sms-tbody');
-  tb.innerHTML='<tr><td colspan="8" class="empty">Loading SMS console…</td></tr>';
-  try{
-    const d=await(await fetch(B+'/api/sms-console?q='+encodeURIComponent(q)+'&otpOnly='+(otpOnly?'1':'0')+'&limit=400')).json();
-    document.getElementById('sms-count').textContent=(d.total||0)+' messages';
-    const rows=d.messages||[];
-    if(!rows.length){tb.innerHTML='<tr><td colspan="8" class="empty">No SMS found</td></tr>';return;}
-    tb.innerHTML=rows.map(m=>\`<tr><td style="color:var(--dim);font-size:.68rem">\${m.timestampMs?new Date(m.timestampMs).toLocaleString():esc(m.time||'—')}</td><td><b>\${esc(m.panelName)}</b><div class="mono" style="color:var(--dim);font-size:.65rem">#\${m.panelId}</div></td><td><b>\${esc(m.deviceName)}</b><div class="mono" style="color:var(--dim);font-size:.65rem">\${esc(m.deviceId)}</div></td><td class="mono">\${esc(m.phoneNumber||'—')}</td><td>\${esc(m.sender||'—')}</td><td>\${m.otp?'<span class="badge b-active">'+esc(m.otp)+'</span>':'—'}</td><td style="min-width:240px;white-space:normal">\${esc(m.text).slice(0,500)}</td><td><button class="btn btn-primary btn-sm" onclick="fillSmsSend('\${jsq(m.panelId)}','\${jsq(m.deviceId)}','\${jsq((m.phoneNumber||'').replace(/[^0-9]/g,''))}','\${jsq(m.otp||'')}')">Use</button></td></tr>\`).join('');
-  }catch{toast('SMS console load failed',false);tb.innerHTML='<tr><td colspan="8" class="empty">Load failed</td></tr>';}
-}
-function fillSmsSend(panelId,deviceId,to,otp){document.getElementById('sms-panel-id').value=panelId;document.getElementById('sms-device-id').value=deviceId;document.getElementById('sms-to').value=to||'';if(otp)document.getElementById('sms-message').value='Your OTP is '+otp;window.scrollTo({top:0,behavior:'smooth'});}
-async function sendConsoleSms(){
-  const panelId=parseInt(document.getElementById('sms-panel-id').value),deviceId=document.getElementById('sms-device-id').value.trim(),to=document.getElementById('sms-to').value.trim(),message=document.getElementById('sms-message').value.trim(),simSlot=parseInt(document.getElementById('sms-sim').value)||1;
-  if(!panelId||!deviceId||!to||!message){toast('Panel, device, number and message required',false);return;}
-  const sp=document.getElementById('sms-send-spin');sp.style.display='';
-  try{const r=await fetch(B+'/api/sms-console/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({panelId,deviceId,to,message,simSlot})});if(r.ok){toast('SMS command sent');document.getElementById('sms-message').value='';}else{const e=await r.json();toast(e.error||'Send failed',false);}}catch{toast('Network error',false);}finally{sp.style.display='none';}
-}
 let _all=[];
 async function loadUsers(){try{_all=await(await fetch(B+'/api/users')).json();renderUsers(_all);}catch{toast('Users load failed',false);}}
 function searchUsers(){const q=document.getElementById('u-search').value.toLowerCase();renderUsers(_all.filter(u=>(u.firstName||'').toLowerCase().includes(q)||(u.username||'').toLowerCase().includes(q)||(u.telegramId||'').includes(q)));}
