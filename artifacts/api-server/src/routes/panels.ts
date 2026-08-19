@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, panelsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { fetchPanelDevices } from "../lib/firebase";
-import { notifyNewPanel } from "../lib/notifications";
+import { notifyBulkPanelsAdded, notifyNewPanel } from "../lib/notifications";
 import {
   CreatePanelBody,
   DeletePanelParams,
@@ -49,6 +49,61 @@ router.post("/panels", async (req, res): Promise<void> => {
     totalDevices: devices.length,
     onlineDevices: devices.filter((device) => device.status).length,
     offlineDevices: devices.filter((device) => !device.status).length,
+  });
+});
+
+router.post("/panels/bulk", async (req, res): Promise<void> => {
+  const rawUrls = Array.isArray(req.body?.firebaseUrls)
+    ? req.body.firebaseUrls
+    : typeof req.body?.firebaseUrls === "string"
+      ? req.body.firebaseUrls.split(/[\n, ]+/)
+      : [];
+  const firebaseUrls = [...new Set(rawUrls.map((url) => String(url).trim()).filter(Boolean))];
+  const secretKey = typeof req.body?.secretKey === "string" ? req.body.secretKey.trim() : "";
+  const namePrefix = typeof req.body?.namePrefix === "string" && req.body.namePrefix.trim()
+    ? req.body.namePrefix.trim()
+    : "Firebase Panel";
+
+  if (!firebaseUrls.length || !secretKey) {
+    res.status(400).json({ error: "Firebase URLs and auth key are required" });
+    return;
+  }
+  if (firebaseUrls.some((url) => !/^https?:\/\/.+/i.test(url))) {
+    res.status(400).json({ error: "One or more Firebase URLs are invalid" });
+    return;
+  }
+
+  const existing = await db.select({ id: panelsTable.id }).from(panelsTable);
+  const startIndex = existing.length + 1;
+  const inserted = await db
+    .insert(panelsTable)
+    .values(firebaseUrls.map((firebaseUrl, index) => ({
+      name: `${namePrefix} ${startIndex + index}`,
+      firebaseUrl,
+      secretKey,
+    })))
+    .returning();
+
+  const withDevices = await Promise.all(
+    inserted.map(async (panel) => ({
+      panel,
+      devices: await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name),
+    }))
+  );
+
+  void notifyBulkPanelsAdded(withDevices.map(({ panel, devices }) => ({ panelName: panel.name, devices })));
+
+  res.status(201).json({
+    added: inserted.length,
+    panels: withDevices.map(({ panel, devices }) => ({
+      id: panel.id,
+      name: panel.name,
+      firebaseUrl: panel.firebaseUrl,
+      createdAt: panel.createdAt.toISOString(),
+      totalDevices: devices.length,
+      onlineDevices: devices.filter((device) => device.status).length,
+      offlineDevices: devices.filter((device) => !device.status).length,
+    })),
   });
 });
 
