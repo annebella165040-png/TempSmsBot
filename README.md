@@ -13,6 +13,8 @@ A Node.js Telegram bot and installable web admin panel for managing Firebase-bac
 - UPI QR credit purchase flow with user screenshot submission and owner approve/decline actions
 - Password-protected admin panel at `/admin/login`, with PWA install support and logo manifest
 - Admin tools for users, credits, bans, web/SMS access, panels, gift cards, broadcasts, and channel settings
+- SMS Console for searching live inbox messages by number, OTP, sender, device, panel, or message text
+- Admin send-SMS command tools for selected panel/device/number from the SMS Console
 - Single and bulk Firebase Realtime Database panel management, with serial panel names and shared auth-key support
 - Premium emoji and small-caps user notifications for new numbers, bulk panel imports, gift cards, and credit updates
 - Live SMS log forwarding to a Telegram group with wave-line format, premium emoji, small-caps text, and action buttons
@@ -86,7 +88,9 @@ Open `/admin/login` on the deployed service and sign in with `ADMIN_PASSWORD`. A
 
 Use a strong, unique admin password. The default fallback in source code is intended only as a development safeguard and should never be relied on in production.
 
-The admin panel can be installed from Chrome/Android as a PWA. Use it to add Firebase URLs, bulk-import many Firebase URLs with one auth key, monitor total/online/offline numbers, grant or deduct credits, unlock user access, generate gift cards, approve credit payments, and broadcast notifications to bot users.
+The admin panel can be installed from Chrome/Android as a PWA. Use it to add Firebase URLs, bulk-import many Firebase URLs with one auth key, monitor total/online/offline numbers, search the SMS Console, send SMS/OTP commands, grant or deduct credits, unlock user access, generate gift cards, approve credit payments, and broadcast notifications to bot users.
+
+If Chrome only creates a shortcut, redeploy the latest code and open `/admin` once after login. The app now serves `/admin.webmanifest`, `/admin-logo.svg`, and `/admin-sw.js`; all three must be reachable over HTTPS for install mode.
 
 ## Telegram Bot Flow
 
