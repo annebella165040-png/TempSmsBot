@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import adminRouter from "./routes/admin";
+import miniAppRouter from "./routes/miniapp";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -32,6 +33,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Railway may probe the service at "/" and bot users open the public domain
 // directly. Keep the admin login available there as well as under /api.
+app.use("/", miniAppRouter);
 app.use("/", adminRouter);
 app.use("/api", router);
 
