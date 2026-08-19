@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, panelsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { fetchPanelDevices } from "../lib/firebase";
+import { fetchPanelDevices, type FirebaseDevice } from "../lib/firebase";
 import { notifyBulkPanelsAdded, notifyNewPanel } from "../lib/notifications";
 import {
   CreatePanelBody,
@@ -10,6 +10,24 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+function normalizeFirebaseUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+async function notifyPanelDevices(panel: typeof panelsTable.$inferSelect): Promise<void> {
+  const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
+  await notifyNewPanel(panel.name, devices);
+}
+
+async function notifyBulkPanelDevices(panels: (typeof panelsTable.$inferSelect)[]): Promise<void> {
+  const result: Array<{ panelName: string; devices: FirebaseDevice[] }> = [];
+  for (const panel of panels) {
+    const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
+    result.push({ panelName: panel.name, devices });
+  }
+  await notifyBulkPanelsAdded(result);
+}
 
 router.get("/panels", async (_req, res): Promise<void> => {
   const panels = await db.select().from(panelsTable).orderBy(panelsTable.createdAt);
@@ -29,26 +47,36 @@ router.post("/panels", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+
+  const firebaseUrl = parsed.data.firebaseUrl.trim();
+  const existingPanels = await db.select().from(panelsTable);
+  const duplicate = existingPanels.find(
+    (panel) => normalizeFirebaseUrl(panel.firebaseUrl) === normalizeFirebaseUrl(firebaseUrl),
+  );
+  if (duplicate) {
+    res.status(409).json({ error: "Firebase already exists", panelId: duplicate.id, panelName: duplicate.name });
+    return;
+  }
+
   const [panel] = await db
     .insert(panelsTable)
     .values({
       name: parsed.data.name,
-      firebaseUrl: parsed.data.firebaseUrl,
+      firebaseUrl,
       secretKey: parsed.data.secretKey,
     })
     .returning();
 
-  const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
-  void notifyNewPanel(panel.name, devices);
+  void notifyPanelDevices(panel).catch(() => undefined);
 
   res.status(201).json({
     id: panel.id,
     name: panel.name,
     firebaseUrl: panel.firebaseUrl,
     createdAt: panel.createdAt.toISOString(),
-    totalDevices: devices.length,
-    onlineDevices: devices.filter((device) => device.status).length,
-    offlineDevices: devices.filter((device) => !device.status).length,
+    totalDevices: 0,
+    onlineDevices: 0,
+    offlineDevices: 0,
   });
 });
 
@@ -58,7 +86,14 @@ router.post("/panels/bulk", async (req, res): Promise<void> => {
     : typeof req.body?.firebaseUrls === "string"
       ? req.body.firebaseUrls.split(/[\n, ]+/)
       : [];
-  const firebaseUrls = [...new Set(rawUrls.map((url) => String(url).trim()).filter(Boolean))];
+  const firebaseUrls = Array.from(
+    new Map(
+      rawUrls
+        .map((url) => String(url).trim())
+        .filter(Boolean)
+        .map((url) => [normalizeFirebaseUrl(url), url]),
+    ).values(),
+  );
   const secretKey = typeof req.body?.secretKey === "string" ? req.body.secretKey.trim() : "";
   const namePrefix = typeof req.body?.namePrefix === "string" && req.body.namePrefix.trim()
     ? req.body.namePrefix.trim()
@@ -73,36 +108,43 @@ router.post("/panels/bulk", async (req, res): Promise<void> => {
     return;
   }
 
-  const existing = await db.select({ id: panelsTable.id }).from(panelsTable);
+  const existing = await db.select().from(panelsTable);
+  const existingUrls = new Set(existing.map((panel) => normalizeFirebaseUrl(panel.firebaseUrl)));
+  const newUrls = firebaseUrls.filter((url) => !existingUrls.has(normalizeFirebaseUrl(url)));
+
+  if (!newUrls.length) {
+    res.status(409).json({
+      error: "All Firebase URLs already exist",
+      added: 0,
+      skipped: firebaseUrls.length,
+      panels: [],
+    });
+    return;
+  }
+
   const startIndex = existing.length + 1;
   const inserted = await db
     .insert(panelsTable)
-    .values(firebaseUrls.map((firebaseUrl, index) => ({
+    .values(newUrls.map((firebaseUrl, index) => ({
       name: `${namePrefix} ${startIndex + index}`,
       firebaseUrl,
       secretKey,
     })))
     .returning();
 
-  const withDevices = await Promise.all(
-    inserted.map(async (panel) => ({
-      panel,
-      devices: await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name),
-    }))
-  );
-
-  void notifyBulkPanelsAdded(withDevices.map(({ panel, devices }) => ({ panelName: panel.name, devices })));
+  void notifyBulkPanelDevices(inserted).catch(() => undefined);
 
   res.status(201).json({
     added: inserted.length,
-    panels: withDevices.map(({ panel, devices }) => ({
+    skipped: firebaseUrls.length - inserted.length,
+    panels: inserted.map((panel) => ({
       id: panel.id,
       name: panel.name,
       firebaseUrl: panel.firebaseUrl,
       createdAt: panel.createdAt.toISOString(),
-      totalDevices: devices.length,
-      onlineDevices: devices.filter((device) => device.status).length,
-      offlineDevices: devices.filter((device) => !device.status).length,
+      totalDevices: 0,
+      onlineDevices: 0,
+      offlineDevices: 0,
     })),
   });
 });
