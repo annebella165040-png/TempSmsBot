@@ -4,6 +4,19 @@ import { isNotNull, gt, count } from "drizzle-orm";
 import { fetchPanelDevices } from "../lib/firebase";
 
 const router: IRouter = Router();
+const DASHBOARD_PANEL_TIMEOUT_MS = 5000;
+
+async function fetchPanelDevicesForDashboard(
+  firebaseUrl: string,
+  secretKey: string,
+  panelId: number,
+  panelName: string,
+) {
+  return Promise.race([
+    fetchPanelDevices(firebaseUrl, secretKey, panelId, panelName),
+    new Promise<[]>(resolve => setTimeout(() => resolve([]), DASHBOARD_PANEL_TIMEOUT_MS)),
+  ]);
+}
 
 router.get("/dashboard", async (_req, res): Promise<void> => {
   // Fetch every Firebase panel in parallel so one slow panel does not hold up
@@ -15,7 +28,12 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     await Promise.all([
       Promise.allSettled(
         panels.map(async (panel) => {
-          const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
+          const devices = await fetchPanelDevicesForDashboard(
+            panel.firebaseUrl,
+            panel.secretKey,
+            panel.id,
+            panel.name,
+          );
           const online = devices.filter((d) => d.status).length;
           const offline = devices.length - online;
           return {
