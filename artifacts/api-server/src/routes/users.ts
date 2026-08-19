@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, botUsersTable } from "@workspace/db";
 import { eq, ilike, or } from "drizzle-orm";
 import { GetUserParams, UpdateUserParams, UpdateUserBody } from "@workspace/api-zod";
+import { notifyCreditsUpdated } from "../lib/notifications";
 
 const router: IRouter = Router();
 
@@ -88,15 +89,20 @@ router.patch("/users/:id", async (req, res): Promise<void> => {
   // isBanned — handled outside zod schema
   if (typeof (req.body as any).isBanned === "boolean") updateData.isBanned = (req.body as any).isBanned;
 
+  const [before] = await db.select().from(botUsersTable).where(eq(botUsersTable.id, params.data.id));
+  if (!before) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
   const [updated] = await db
     .update(botUsersTable)
     .set(updateData)
     .where(eq(botUsersTable.id, params.data.id))
     .returning();
 
-  if (!updated) {
-    res.status(404).json({ error: "User not found" });
-    return;
+  if (parsed.data.smsCredits !== undefined && updated.smsCredits !== before.smsCredits) {
+    void notifyCreditsUpdated(updated.telegramId, before.smsCredits, updated.smsCredits);
   }
   res.json(serializeUser(updated));
 });
