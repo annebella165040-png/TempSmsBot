@@ -16,6 +16,7 @@ import {
 import * as fs from "fs";
 import * as path from "path";
 import { logger } from "./logger";
+import { createMiniAppLicense } from "./miniAppLicense";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const BOT_USERNAME  = process.env.BOT_USERNAME  || "AnneBella_Sms_Panel_Bot";
@@ -1382,16 +1383,27 @@ function setupHandlers(bot: TelegramBot) {
 
         const configuredUrl = process.env.PUBLIC_APP_URL?.trim();
         const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
-        const webUrl = configuredUrl
+        const baseUrl = configuredUrl
           ? configuredUrl.replace(/\/+$/, "")
           : railwayDomain
             ? `https://${railwayDomain.replace(/\/+$/, "")}`
             : "https://your-railway-domain.up.railway.app";
+        const now = new Date();
+        const currentExpiry = user.webPanelExpiresAt && user.webPanelExpiresAt > now
+          ? user.webPanelExpiresAt
+          : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        await db
+          .update(botUsersTable)
+          .set({ webPanelExpiresAt: currentExpiry })
+          .where(eq(botUsersTable.id, user.id));
+        const license = createMiniAppLicense(user.telegramId, currentExpiry);
+        const webUrl = `${baseUrl}/miniapp?license=${encodeURIComponent(license)}`;
 
         await send(
           chatId,
  `${em(E.check, "")} <b>WEB PANEL ACCESS GRANTED!</b>\n\n` +
           `${em(E.credits, "")} CREDITS: <b>${user.smsCredits}</b>\n` +
+          `${em(E.timer, "")} LICENSE VALID: <b>1 MONTH</b>\n` +
           `${em(E.link, "")} <a href="${webUrl}">CLICK HERE TO OPEN WEB PANEL</a>`,
           { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
