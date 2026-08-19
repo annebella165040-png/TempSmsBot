@@ -62,7 +62,6 @@ router.get("/admin.webmanifest", (_req, res) => {
     short_name: "AnneBella",
     description: "AnneBella SMS admin control panel",
     start_url: "/admin",
-    id: "/admin",
     scope: "/",
     display: "standalone",
     background_color: "#020910",
@@ -73,29 +72,25 @@ router.get("/admin.webmanifest", (_req, res) => {
   }));
 });
 
-router.get("/admin-sw.js", (_req, res) => {
-  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-  res.setHeader("Service-Worker-Allowed", "/");
-  res.send(`
-const CACHE_NAME = "annebella-admin-v5";
-const CORE = ["/admin", "/admin.webmanifest", "/admin-logo.svg"];
-self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
-});
-self.addEventListener("activate", event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))).then(() => self.clients.claim()));
-});
-self.addEventListener("fetch", event => {
-  const req = event.request;
-  if (req.method !== "GET") return;
-  event.respondWith(fetch(req).catch(() => caches.match(req).then(cached => cached || caches.match("/admin"))));
-});
-`);
-});
-
 router.get("/admin-logo.svg", (_req, res) => {
   res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
   res.send(ADMIN_LOGO_SVG);
+});
+
+router.get("/admin-sw.js", (_req, res) => {
+  res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  res.send(`
+self.addEventListener("install", event => self.skipWaiting());
+self.addEventListener("activate", event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.map(key => caches.delete(key))))
+      .then(() => self.registration.unregister())
+      .then(() => self.clients.matchAll({ type: "window" }))
+      .then(clients => clients.forEach(client => client.navigate(client.url)))
+  );
+});
+`);
 });
 
 // ── POST /admin/login ──
@@ -776,31 +771,21 @@ function switchTab(tab){
 }
 document.querySelectorAll('.nav-item,.bnav-item').forEach(n=>n.addEventListener('click',()=>switchTab(n.dataset.tab)));
 function esc(s){const d=document.createElement('div');d.textContent=String(s??'');return d.innerHTML;}
-function jsq(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/[\\r\\n]+/g,' ');}
 function countUp(el,t,dur=800){const s=performance.now(),f=parseInt(el.textContent)||0;function step(n){const p=Math.min((n-s)/dur,1),e=1-Math.pow(1-p,3);el.textContent=Math.round(f+(t-f)*e);if(p<1)requestAnimationFrame(step);}requestAnimationFrame(step);}
 
 async function loadDashboard(){
-  const tb=document.getElementById('panel-tbody');
-  const ctrl=new AbortController();
-  const timer=setTimeout(()=>ctrl.abort(),20000);
   try{
-    const r=await fetch(B+'/api/dashboard',{signal:ctrl.signal,cache:'no-store'});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();
+    const d=await(await fetch(B+'/api/dashboard')).json();
     countUp(document.getElementById('s-devices'),d.totalDevices??0);
     countUp(document.getElementById('s-online'),d.onlineDevices??0);
     countUp(document.getElementById('s-offline'),d.offlineDevices??0);
     countUp(document.getElementById('s-users'),d.totalUsers??0);
     countUp(document.getElementById('s-active'),d.activeUsers??0);
     countUp(document.getElementById('s-gifts'),d.totalGiftCards??0);
+    const tb=document.getElementById('panel-tbody');
     if(!d.panelBreakdown?.length){tb.innerHTML='<tr><td colspan="5" class="empty">No panels</td></tr>';return;}
     tb.innerHTML=d.panelBreakdown.map((p,i)=>\`<tr><td class="mono" style="color:var(--dim)">\${i+1}</td><td><b>\${esc(p.panelName)}</b></td><td>\${p.total}</td><td><span class="badge b-on">\${p.online}</span></td><td><span class="badge b-off">\${p.offline}</span></td></tr>\`).join('');
-  }catch{
-    tb.innerHTML='<tr><td colspan="5" class="empty">Dashboard load failed. Refresh again.</td></tr>';
-    toast('Dashboard load failed',false);
-  }finally{
-    clearTimeout(timer);
-  }
+  }catch{toast('Dashboard load failed',false);}
 }
 async function loadPanels(){
   try{
@@ -883,7 +868,6 @@ async function delChannel(id,btn){if(!confirm('Remove?'))return;btn.disabled=tru
 })();
 
 loadDashboard();
-if('serviceWorker' in navigator){navigator.serviceWorker.register('/admin-sw.js').catch(()=>{});}
 </script>
 </body>
 </html>`;
