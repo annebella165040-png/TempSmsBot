@@ -593,6 +593,7 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
   <nav id="sidebar">
     <div class="nav-item active" data-tab="dashboard"><div class="nav-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><span class="nav-label">Dashboard</span></div>
     <div class="nav-item" data-tab="panels"><div class="nav-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><span class="nav-label">Panels</span></div>
+    <div class="nav-item" data-tab="adminnumber"><div class="nav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/><path d="M8 6h8"/></svg></div><span class="nav-label">Admin Number</span></div>
     <div class="nav-divider"></div>
     <div class="nav-item" data-tab="users"><div class="nav-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><span class="nav-label">Users</span></div>
     <div class="nav-item" data-tab="giftcards"><div class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></div><span class="nav-label">Gift Cards</span></div>
@@ -648,15 +649,19 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Admin Number Room</span></div>
+          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Registered Panels</span><button class="btn btn-danger btn-sm" onclick="clearAllPanels(this)"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Clear All</button></div>
+          <div class="card-body" style="padding:0"><div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Firebase URL</th><th>Added</th><th>Action</th></tr></thead><tbody id="panels-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
+        </div>
+      </div>
+
+      <!-- ADMIN NUMBER -->
+      <div class="section" id="tab-adminnumber">
+        <div class="card">
+          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/><path d="M8 6h8"/></svg>Admin Number Room</span></div>
           <div class="card-body">
             <button class="btn btn-primary btn-full" onclick="adminGetNumber(this)"><span id="admin-num-spin" style="display:none" class="spin"></span><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>Get Random Number</button>
             <div id="admin-number-result" class="empty" style="margin-top:10px">No admin number generated yet</div>
           </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Registered Panels</span><button class="btn btn-danger btn-sm" onclick="clearAllPanels(this)"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Clear All</button></div>
-          <div class="card-body" style="padding:0"><div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Firebase URL</th><th>Added</th><th>Action</th></tr></thead><tbody id="panels-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
         </div>
       </div>
 
@@ -745,6 +750,7 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
 <div id="bnav">
   <div class="bnav-item active" data-tab="dashboard"><div class="bnav-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><span class="bnav-label">Stats</span></div>
   <div class="bnav-item" data-tab="panels"><div class="bnav-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><span class="bnav-label">Panels</span></div>
+  <div class="bnav-item" data-tab="adminnumber"><div class="bnav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/><path d="M8 6h8"/></svg></div><span class="bnav-label">Number</span></div>
   <div class="bnav-item" data-tab="users"><div class="bnav-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><span class="bnav-label">Users</span></div>
   <div class="bnav-item" data-tab="giftcards"><div class="bnav-icon"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/></svg></div><span class="bnav-label">Gifts</span></div>
   <div class="bnav-item" data-tab="broadcast"><div class="bnav-icon"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div><span class="bnav-label">Broadcast</span></div>
@@ -764,8 +770,8 @@ function toast(msg,ok=true){
 }
 function tick(){document.getElementById('foot-time').textContent=new Date().toLocaleTimeString('en-GB');}
 setInterval(tick,1000);tick();
-const TAB_ICONS={dashboard:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',panels:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',giftcards:'<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/>',broadcast:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',channels:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'};
-const TAB_TITLES={dashboard:'Dashboard',panels:'Firebase Panels',users:'Bot Users',giftcards:'Gift Cards',broadcast:'Broadcast',channels:'Channels'};
+const TAB_ICONS={dashboard:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',panels:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',adminnumber:'<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/><path d="M8 6h8"/>',users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',giftcards:'<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/>',broadcast:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',channels:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'};
+const TAB_TITLES={dashboard:'Dashboard',panels:'Firebase Panels',adminnumber:'Admin Number',users:'Bot Users',giftcards:'Gift Cards',broadcast:'Broadcast',channels:'Channels'};
 function switchTab(tab){
   document.querySelectorAll('.nav-item,.bnav-item').forEach(n=>n.classList.toggle('active',n.dataset.tab===tab));
   document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id==='tab-'+tab));
