@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, panelsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { fetchPanelDevices, type FirebaseDevice } from "../lib/firebase";
+import { fetchPanelDevices } from "../lib/firebase";
 import { notifyBulkPanelsAdded, notifyNewPanel } from "../lib/notifications";
 import {
   CreatePanelBody,
@@ -18,15 +18,6 @@ function normalizeFirebaseUrl(url: string): string {
 async function notifyPanelDevices(panel: typeof panelsTable.$inferSelect): Promise<void> {
   const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
   await notifyNewPanel(panel.name, devices);
-}
-
-async function notifyBulkPanelDevices(panels: (typeof panelsTable.$inferSelect)[]): Promise<void> {
-  const result: Array<{ panelName: string; devices: FirebaseDevice[] }> = [];
-  for (const panel of panels) {
-    const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
-    result.push({ panelName: panel.name, devices });
-  }
-  await notifyBulkPanelsAdded(result);
 }
 
 router.get("/panels", async (_req, res): Promise<void> => {
@@ -132,7 +123,7 @@ router.post("/panels/bulk", async (req, res): Promise<void> => {
     })))
     .returning();
 
-  void notifyBulkPanelDevices(inserted).catch(() => undefined);
+  void notifyBulkPanelsAdded(inserted.map((panel) => ({ panelName: panel.name, devices: [] }))).catch(() => undefined);
 
   res.status(201).json({
     added: inserted.length,
