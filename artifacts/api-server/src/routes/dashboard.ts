@@ -1,42 +1,51 @@
 import { Router, type IRouter } from "express";
 import { db, panelsTable, botUsersTable, giftCardsTable } from "@workspace/db";
 import { isNotNull, gt, count } from "drizzle-orm";
+import { fetchPanelDevices } from "../lib/firebase";
 
 const router: IRouter = Router();
 
 router.get("/dashboard", async (_req, res): Promise<void> => {
-  // Keep the dashboard instant. Live Firebase scans can become slow when many
-  // panel URLs are configured, so this overview only uses local database data.
+  // Fetch all panels + live device counts
+  const panels = await db.select().from(panelsTable);
+
+  const panelBreakdown = [];
+  let totalOnline = 0;
+  let totalOffline = 0;
+
+  for (const panel of panels) {
+    const devices = await fetchPanelDevices(panel.firebaseUrl, panel.secretKey, panel.id, panel.name);
+    const online = devices.filter((d) => d.status).length;
+    const offline = devices.length - online;
+    totalOnline += online;
+    totalOffline += offline;
+    panelBreakdown.push({
+      panelId: panel.id,
+      panelName: panel.name,
+      online,
+      offline,
+      total: devices.length,
+    });
+  }
+
+  const [usersResult] = await db.select({ count: count() }).from(botUsersTable);
   const now = new Date();
+  const [activeResult] = await db
+    .select({ count: count() })
+    .from(botUsersTable)
+    .where(gt(botUsersTable.getNumberExpiresAt, now));
 
-  const [panels, [usersResult], [activeResult], [totalGiftResult], [usedGiftResult]] =
-    await Promise.all([
-      db.select().from(panelsTable).orderBy(panelsTable.createdAt),
-      db.select({ count: count() }).from(botUsersTable),
-      db
-        .select({ count: count() })
-        .from(botUsersTable)
-        .where(gt(botUsersTable.getNumberExpiresAt, now)),
-      db.select({ count: count() }).from(giftCardsTable),
-      db
-        .select({ count: count() })
-        .from(giftCardsTable)
-        .where(isNotNull(giftCardsTable.usedBy)),
-    ]);
-
-  const panelBreakdown = panels.map((panel) => ({
-    panelId: panel.id,
-    panelName: panel.name,
-    online: 0,
-    offline: 0,
-    total: 0,
-  }));
+  const [totalGiftResult] = await db.select({ count: count() }).from(giftCardsTable);
+  const [usedGiftResult] = await db
+    .select({ count: count() })
+    .from(giftCardsTable)
+    .where(isNotNull(giftCardsTable.usedBy));
 
   res.json({
     totalPanels: panels.length,
-    totalDevices: 0,
-    onlineDevices: 0,
-    offlineDevices: 0,
+    totalDevices: totalOnline + totalOffline,
+    onlineDevices: totalOnline,
+    offlineDevices: totalOffline,
     totalUsers: usersResult.count,
     activeUsers: activeResult.count,
     totalGiftCards: totalGiftResult.count,
