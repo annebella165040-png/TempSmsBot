@@ -621,6 +621,17 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
           </div>
         </div>
         <div class="card">
+          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/><path d="M17 15v6"/><path d="M14 18h6"/></svg>Bulk Add Firebase</span></div>
+          <div class="card-body">
+            <div class="form-grid c2">
+              <div class="form-group"><label>Name Prefix</label><input id="bulk-prefix" placeholder="Firebase Panel"/></div>
+              <div class="form-group"><label>Same Secret / Auth Token</label><input id="bulk-secret" type="password" placeholder="One auth key for all URLs"/></div>
+              <div class="form-group" style="grid-column:1/-1"><label>Firebase URLs</label><textarea id="bulk-urls" placeholder="Paste one Firebase Realtime DB URL per line"></textarea></div>
+            </div>
+            <button class="btn btn-success btn-full" onclick="addBulkPanels()"><span id="bulk-spin" style="display:none" class="spin"></span><svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Add Bulk Panels</button>
+          </div>
+        </div>
+        <div class="card">
           <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Registered Panels</span></div>
           <div class="card-body" style="padding:0"><div class="tbl-wrap"><table><thead><tr><th>#</th><th>Name</th><th>Firebase URL</th><th>Added</th><th>Action</th></tr></thead><tbody id="panels-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
         </div>
@@ -773,6 +784,19 @@ async function addPanel(){
   if(!name||!url||!secret){toast('All fields required',false);return;}
   const sp=document.getElementById('p-spin');sp.style.display='';
   try{const r=await fetch(B+'/api/panels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,firebaseUrl:url,secretKey:secret})});if(r.ok){const d=await r.json();toast('Panel added: '+(d.totalDevices??0)+' total / '+(d.onlineDevices??0)+' online');['p-name','p-url','p-secret'].forEach(id=>document.getElementById(id).value='');loadPanels();loadDashboard();}else{const e=await r.json();toast('Error: '+(e.error||r.status),false);}}catch{toast('Network error',false);}finally{sp.style.display='none';}
+}
+async function addBulkPanels(){
+  const urlsRaw=document.getElementById('bulk-urls').value.trim(),secret=document.getElementById('bulk-secret').value.trim(),namePrefix=document.getElementById('bulk-prefix').value.trim()||'Firebase Panel';
+  const firebaseUrls=[...new Set(urlsRaw.split(/[\\n, ]+/).map(x=>x.trim()).filter(Boolean))];
+  if(!firebaseUrls.length||!secret){toast('URLs and auth key required',false);return;}
+  if(!confirm('Add '+firebaseUrls.length+' Firebase panels with same auth key?'))return;
+  const sp=document.getElementById('bulk-spin');sp.style.display='';
+  try{
+    const r=await fetch(B+'/api/panels/bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({firebaseUrls,secretKey:secret,namePrefix})});
+    const d=await r.json();
+    if(r.ok){const total=(d.panels||[]).reduce((s,p)=>s+(p.totalDevices||0),0),online=(d.panels||[]).reduce((s,p)=>s+(p.onlineDevices||0),0);toast('Bulk added: '+d.added+' panels / '+total+' total / '+online+' online');['bulk-urls','bulk-secret'].forEach(id=>document.getElementById(id).value='');loadPanels();loadDashboard();}
+    else toast('Error: '+(d.error||r.status),false);
+  }catch{toast('Network error',false);}finally{sp.style.display='none';}
 }
 async function delPanel(id,btn){if(!confirm('Delete this panel?'))return;btn.disabled=true;try{const r=await fetch(B+'/api/panels/'+id,{method:'DELETE'});if(r.ok){toast('Deleted');loadPanels();loadDashboard();}else toast('Failed',false);}catch{toast('Error',false);}finally{btn.disabled=false;}}
 let _all=[];
