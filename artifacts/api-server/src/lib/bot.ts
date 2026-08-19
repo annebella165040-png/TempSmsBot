@@ -331,6 +331,19 @@ function watchMenuKeyboard(): CKeyboard {
   };
 }
 
+function developerInlineKeyboard() {
+  return {
+    inline_keyboard: [[
+      iBtn({
+        label: "DEVELOPER",
+        emojiId: E.support,
+        url: "https://t.me/annebella",
+        style: "danger",
+      }),
+    ]],
+  };
+}
+
 function cancelKeyboard(): CKeyboard {
   return {
     keyboard: [
@@ -1473,7 +1486,7 @@ function setupHandlers(bot: TelegramBot) {
           `${divider()}\n\n` +
           `${em(E.warn, "")} Need help with credits, numbers, OTP, or web panel access?\n\n` +
           `${em(E.link, "")} Contact developer: ${DEVELOPER}`,
-          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+          { parse_mode: "HTML", reply_markup: developerInlineKeyboard() as any }
         );
         return;
       }
