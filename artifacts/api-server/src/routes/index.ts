@@ -8,6 +8,7 @@ import botRouter from "./bot";
 import adminRouter from "./admin";
 import broadcastRouter from "./broadcast";
 import channelsRouter from "./channels";
+import smsConsoleRouter from "./smsConsole";
 
 const router: IRouter = Router();
 
@@ -19,6 +20,7 @@ router.use(usersRouter);
 router.use(giftCardsRouter);
 router.use(broadcastRouter);
 router.use(channelsRouter);
+router.use(smsConsoleRouter);
 router.use(botRouter);
 
 export default router;
