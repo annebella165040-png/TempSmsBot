@@ -77,7 +77,7 @@ router.get("/admin-sw.js", (_req, res) => {
   res.setHeader("Content-Type", "application/javascript; charset=utf-8");
   res.setHeader("Service-Worker-Allowed", "/");
   res.send(`
-const CACHE_NAME = "annebella-admin-v4";
+const CACHE_NAME = "annebella-admin-v5";
 const CORE = ["/admin", "/admin.webmanifest", "/admin-logo.svg"];
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
