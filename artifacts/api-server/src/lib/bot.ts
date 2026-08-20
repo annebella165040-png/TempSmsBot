@@ -28,6 +28,16 @@ const REFERRAL_REWARD_CREDITS = 20;
 const WEB_PANEL_MIN_CREDITS = 1000;
 const UPI_ID = "gauravpayout@fam";
 
+function cleanBotUsername(username: string): string {
+  return username
+    .trim()
+    .replace(/^https?:\/\/t\.me\//i, "")
+    .replace(/^@+/, "")
+    .split(/[/?#]/)[0] || "AnneBella_Sms_Panel_Bot";
+}
+
+const BOT_LINK_USERNAME = cleanBotUsername(BOT_USERNAME);
+
 // Required channels - order determines 2x2 grid layout
 const REQUIRED_CHANNELS = [
   { id: "@indiagates",         label: "ANNEBELLA",     url: "https://t.me/indiagates",         emojiId: "5372849966689566579" },
@@ -803,7 +813,8 @@ function setupHandlers(bot: TelegramBot) {
 
   const sendPhoto = async (cid: number | string, photo: string, opts: Record<string, any> = {}) => {
     try {
-      return await bot.sendPhoto(cid, photo, opts);
+      const htmlOpts = opts.caption && opts.parse_mode === "HTML" ? { ...opts, caption: sc(opts.caption) } : opts;
+      return await bot.sendPhoto(cid, photo, htmlOpts);
     } catch (err) {
       if (!opts.caption || opts.parse_mode !== "HTML") throw err;
       logger.warn({ err }, "HTML photo caption failed, retrying as plain text");
@@ -835,7 +846,7 @@ function setupHandlers(bot: TelegramBot) {
 
     try {
       await bot.copyMessage(OWNER_CHAT_ID, proofMessage.chat.id, proofMessage.message_id, {
-        caption,
+        caption: sc(caption),
         parse_mode: "HTML",
         reply_markup,
       } as any);
@@ -1368,7 +1379,7 @@ function setupHandlers(bot: TelegramBot) {
           ? `${em(E.check, "")} READY - ${user.smsCredits} credits`
           : `${em(E.lock, "")} NEED ${WEB_PANEL_MIN_CREDITS - user.smsCredits} MORE CREDITS`;
 
- const referralLink = `https://t.me/${BOT_USERNAME}?start=${user.referralCode}`;
+ const referralLink = `https://t.me/${BOT_LINK_USERNAME}?start=${user.referralCode}`;
 
         await send(
           chatId,
