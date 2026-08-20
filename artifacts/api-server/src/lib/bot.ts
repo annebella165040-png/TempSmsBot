@@ -147,6 +147,8 @@ const E = {
   db:           "5235588635885054955",   // ðŸ—„️
   sms:          "5453900977432188793",   // ðŸ’¬  (verified from adsbot; 5258500422393415126=ðŸ“²)
   refresh:      "5339233635620899144",   // ðŸ”„  (verified from adsbot; 5301096984617166561=ðŸ’µ)
+  usdt:         "6035152649790164056",
+  binance:      "6035152649790164056",
 };
 
 // Unicode fallback for every entry in E — shown to non-Premium users
@@ -761,7 +763,7 @@ function paymentMethodKeyboard(): { inline_keyboard: any[][] } {
     inline_keyboard: [
       [
         iBtn({ label: "UPI", emojiId: E.money, cb: "paymethod_upi", style: "success" }),
-        iBtn({ label: "USDT", emojiId: E.coin, cb: "paymethod_usdt", style: "primary" }),
+        iBtn({ label: "USDT", emojiId: E.usdt, cb: "paymethod_usdt", style: "primary" }),
       ],
     ],
   };
@@ -771,7 +773,7 @@ function usdtKeyboard(): { inline_keyboard: any[][] } {
   return {
     inline_keyboard: [
       [
-        iBtn({ label: "BINANCE ID", emojiId: E.money, copyText: USDT_BINANCE_ID, style: "success" }),
+        iBtn({ label: "BINANCE ID", emojiId: E.binance, copyText: USDT_BINANCE_ID, style: "success" }),
         iBtn({ label: "TRC20", emojiId: E.star, copyText: USDT_TRC20_ADDRESS, style: "primary" }),
       ],
       [
@@ -788,7 +790,7 @@ function paymentMethodMessage(pending: PendingCreditPayment): string {
     `${em(E.credits, "")} <b>PACKAGE:</b> ${pending.credits} CREDITS\n` +
     `${em(E.money, "")} <b>AMOUNT:</b> ${pending.price !== null ? `₹${pending.price}` : "CUSTOM / MANUAL"}\n\n` +
     `${em(E.money, "")} UPI QR ke liye <b>UPI</b> dabao.\n` +
-    `${em(E.coin, "")} USDT address ke liye <b>USDT</b> dabao.`
+    `${em(E.usdt, "")} USDT address ke liye <b>USDT</b> dabao.`
   );
 }
 
@@ -878,7 +880,7 @@ function setupHandlers(bot: TelegramBot) {
       `${em(E.id, "")} <b>ID:</b> <code>${user.telegramId}</code>\n` +
       `${em(E.link, "")} <b>USERNAME:</b> ${user.username ? `@${escapeTelegramHtml(user.username)}` : "N/A"}\n` +
       `${em(E.credits, "")} <b>PACKAGE:</b> ${pending.credits} CREDITS\n` +
-      `${em(E.coin, "")} <b>METHOD:</b> ${(pending.method || "upi").toUpperCase()}\n` +
+      `${em(pending.method === "usdt" ? E.usdt : E.coin, "")} <b>METHOD:</b> ${(pending.method || "upi").toUpperCase()}\n` +
       `${em(E.money, "")} <b>AMOUNT:</b> ${pending.price !== null ? `₹${pending.price}` : "CUSTOM / MANUAL"}`;
 
     const reply_markup = {
@@ -1965,10 +1967,10 @@ function setupHandlers(bot: TelegramBot) {
         } else {
           await send(
             chatId,
-            `${em(E.coin, "")} <b>USDT PAYMENT</b>\n${divider()}\n\n` +
+            `${em(E.usdt, "")} <b>USDT PAYMENT</b>\n${divider()}\n\n` +
             `${em(E.credits, "")} <b>PACKAGE:</b> ${selectedPending.credits} CREDITS\n` +
             `${em(E.money, "")} <b>AMOUNT:</b> ${selectedPending.price !== null ? `₹${selectedPending.price}` : "CUSTOM / MANUAL"}\n\n` +
-            `${em(E.money, "")} <b>BINANCE ID</b>\n<code>${USDT_BINANCE_ID}</code>\n\n` +
+            `${em(E.binance, "")} <b>BINANCE ID</b>\n<code>${USDT_BINANCE_ID}</code>\n\n` +
             `${em(E.star, "")} <b>BSC / BNB - BEP20</b>\n<code>${USDT_BEP20_ADDRESS}</code>\n\n` +
             `${em(E.star, "")} <b>TRX / TRON - TRC20</b>\n<code>${USDT_TRC20_ADDRESS}</code>\n\n` +
             `${em(E.star, "")} <b>ETH / ETHEREUM - ERC20</b>\n<code>${USDT_ERC20_ADDRESS}</code>\n\n` +
