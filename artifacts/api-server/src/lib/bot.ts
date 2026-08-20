@@ -104,7 +104,7 @@ const E = {
   globe:        "5372849966689566579",   // ðŸŒ
   profile:      "5206318837489743801",   // ðŸ‘¤
   gift:         "5359664288241829619",   // ðŸŽ
-  coin:         "5334998226636390258",   // ðŸª™
+  coin:         "5253742260054409879",   // credits/referral
   back:         "5330237710655306682",   // â†©️
   newnum:       "5319160079465857105",   // ðŸ†•
   eye:          "6206155797722830770",   // ðŸ‘
@@ -133,7 +133,7 @@ const E = {
   referral:     "5197269100878907942",   // ðŸ‘¥
   credits:      "5253742260054409879",   // ðŸ’Ž
   online:       "5440621591387980068",   // ðŸŸ¢
-  offline:      "5294048127240655242",   // ðŸ”´
+  offline:      "6206174450765796040",   // offline/warning
   battery:      "5246772116543512028",   // battery/status details
   india:        "5291933173674957761",   // Indian flag
   sim:          "6269085886177087845",   // ðŸ“²
@@ -149,6 +149,7 @@ const E = {
   refresh:      "5339233635620899144",   // ðŸ”„  (verified from adsbot; 5301096984617166561=ðŸ’µ)
   usdt:         "6035152649790164056",
   binance:      "6035152649790164056",
+  upi:          "6019521004647223512",
 };
 
 // Unicode fallback for every entry in E — shown to non-Premium users
@@ -161,7 +162,6 @@ const E_FB: Record<string, string> = {
   "5372849966689566579": "🌐",
   "5206318837489743801": "👤",
   "5359664288241829619": "🎁",
-  "5334998226636390258": "🪙",
   "5330237710655306682": "↩️",
   "5319160079465857105": "🆕",
   "6206155797722830770": "👁",
@@ -193,7 +193,7 @@ const E_FB: Record<string, string> = {
   "5197269100878907942": "👥",
   "5253742260054409879": "💎",
   "5440621591387980068": "🟢",
-  "5294048127240655242": "🔴",
+  "6019521004647223512": "💸",
   "5291933173674957761": "🇮🇳",
   "6269085886177087845": "📲",
   "6017187377116614559": "🎲",
@@ -762,7 +762,7 @@ function paymentMethodKeyboard(): { inline_keyboard: any[][] } {
   return {
     inline_keyboard: [
       [
-        iBtn({ label: "UPI", emojiId: E.money, cb: "paymethod_upi", style: "success" }),
+        iBtn({ label: "UPI", emojiId: E.upi, cb: "paymethod_upi", style: "success" }),
         iBtn({ label: "USDT", emojiId: E.usdt, cb: "paymethod_usdt", style: "primary" }),
       ],
     ],
@@ -789,7 +789,7 @@ function paymentMethodMessage(pending: PendingCreditPayment): string {
     `${em(E.buy, "")} <b>SELECT PAYMENT METHOD</b>\n${divider()}\n\n` +
     `${em(E.credits, "")} <b>PACKAGE:</b> ${pending.credits} CREDITS\n` +
     `${em(E.money, "")} <b>AMOUNT:</b> ${pending.price !== null ? `₹${pending.price}` : "CUSTOM / MANUAL"}\n\n` +
-    `${em(E.money, "")} UPI QR ke liye <b>UPI</b> dabao.\n` +
+    `${em(E.upi, "")} UPI QR ke liye <b>UPI</b> dabao.\n` +
     `${em(E.usdt, "")} USDT address ke liye <b>USDT</b> dabao.`
   );
 }
@@ -1380,16 +1380,21 @@ function setupHandlers(bot: TelegramBot) {
           totalOffline += devices.filter((d) => !d.status).length;
           totalDevices += devices.length;
         }
+        const activeRate = totalDevices > 0 ? Math.round((totalOnline / totalDevices) * 100) : 0;
 
         await send(
           chatId,
  `${em(E.check, "")} <b>STATUS REPORT</b>\n` +
           `${divider()}\n\n` +
-          `${em(E.check, "")} <b>ALL PANELS — TOTAL</b>\n` +
-          `${em(E.check, "")} <b>ONLINE</b> : ${totalOnline}\n` +
-          `${em(E.offline, "")} <b>OFFLINE</b> : ${totalOffline}\n` +
-          `${em(E.check, "")} <b>GRAND TOTAL</b> : ${totalDevices}\n\n` +
-          `${em(E.refresh, "")} <b>LIVE DATA</b>`,
+          `${em(E.panel, "")} <b>CONNECTED PANELS</b> : ${panels.length}\n` +
+          `${em(E.total, "")} <b>TOTAL DEVICES</b>    : ${totalDevices}\n` +
+          `${em(E.online, "")} <b>ONLINE DEVICES</b>   : ${totalOnline}\n` +
+          `${em(E.offline, "")} <b>OFFLINE DEVICES</b>  : ${totalOffline}\n` +
+          `${em(E.status_ok, "")} <b>ACTIVE RATE</b>      : ${activeRate}%\n\n` +
+          `${divider()}\n` +
+          `${em(E.refresh, "")} <b>LIVE INVENTORY</b>\n` +
+          `Numbers are refreshed directly from all connected Firebase panels.\n` +
+          `Use <b>GET NUMBER</b> to receive an active number instantly.`,
           { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
         return;
@@ -1546,24 +1551,31 @@ function setupHandlers(bot: TelegramBot) {
       }
 
       if (text === sct("PROFILE")) {
-        const getNum = user.smsCredits >= NUMBER_PURCHASE_CREDITS ? ` READY` : ` LOW CREDITS`;
-        const webPanel = user.smsCredits >= WEB_PANEL_MIN_CREDITS ? ` READY` : ` LOCKED`;
-        const sendSms = user.sendSmsUnlocked ? ` UNLOCKED` : ` LOCKED`;
+        const getNum = user.smsCredits >= NUMBER_PURCHASE_CREDITS
+          ? `READY - ${NUMBER_PURCHASE_CREDITS} credits per number`
+          : `LOW CREDITS - need ${NUMBER_PURCHASE_CREDITS - user.smsCredits} more`;
+        const webPanel = user.smsCredits >= WEB_PANEL_MIN_CREDITS
+          ? `READY - 1 month license available`
+          : `LOCKED - need ${WEB_PANEL_MIN_CREDITS - user.smsCredits} more credits`;
+        const sendSms = user.sendSmsUnlocked ? `UNLOCKED - outbound SMS enabled` : `LOCKED - complete referral requirement`;
+        const usernameLine = user.username ? `@${escapeTelegramHtml(user.username)}` : "Not connected";
 
         await send(
           chatId,
  `${em(E.profile, "")} <b>MY PROFILE</b>\n` +
           `${divider()}\n\n` +
-          `${em(E.id, "")} <b>NAME</b>    : ${escapeTelegramHtml(user.firstName)}\n` +
-          `${em(E.id, "")} <b>ID</b>      : ${user.telegramId}\n` +
-          `${em(E.check, "")} <b>JOINED</b>  : ${user.createdAt?.toLocaleDateString("en-IN") || "N/A"}\n` +
+          `${em(E.name, "")} <b>NAME</b>       : ${escapeTelegramHtml(user.firstName)}\n` +
+          `${em(E.link, "")} <b>USERNAME</b>   : ${usernameLine}\n` +
+          `${em(E.id, "")} <b>TELEGRAM ID</b> : <code>${user.telegramId}</code>\n` +
+          `${em(E.joined, "")} <b>JOINED ON</b>   : ${user.createdAt?.toLocaleDateString("en-IN") || "N/A"}\n` +
           `${divider()}\n\n` +
-          `${em(E.lightning, "")} <b>GET NUMBER</b> : ${getNum}\n` +
-          `${em(E.panel, "")} <b>WEB PANEL</b>  : ${webPanel}\n` +
-          `${em(E.phone, "")} <b>SEND SMS</b>   : ${sendSms}\n` +
+          `${em(E.lightning, "")} <b>GET NUMBER ACCESS</b>\n${getNum}\n\n` +
+          `${em(E.panel, "")} <b>WEB PANEL ACCESS</b>\n${webPanel}\n\n` +
+          `${em(E.phone, "")} <b>SEND SMS ACCESS</b>\n${sendSms}\n` +
           `${divider()}\n\n` +
-          `${em(E.coin, "")} <b>REFERRALS</b> : ${user.referralCount}\n` +
-          `${em(E.credits, "")} <b>CREDITS</b>   : ${user.smsCredits}`,
+          `${em(E.referral, "")} <b>TOTAL REFERRALS</b> : ${user.referralCount}\n` +
+          `${em(E.credits, "")} <b>AVAILABLE CREDITS</b> : ${user.smsCredits}\n\n` +
+          `${em(E.refresh, "")} Referral rewards and approved payments are added automatically.`,
           { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
         return;
@@ -1959,7 +1971,7 @@ function setupHandlers(bot: TelegramBot) {
             `${em(E.buy, "")} <b>PAYMENT QR</b>\n${divider()}\n\n` +
             `${em(E.credits, "")} <b>PACKAGE:</b> ${selectedPending.credits} CREDITS\n` +
             `${em(E.money, "")} <b>AMOUNT:</b> ${selectedPending.price !== null ? `₹${selectedPending.price}` : "CUSTOM / MANUAL"}\n` +
-            `${em(E.money, "")} <b>UPI:</b> <code>${UPI_ID}</code>\n\n` +
+            `${em(E.upi, "")} <b>UPI:</b> <code>${UPI_ID}</code>\n\n` +
             `${em(E.history, "")} Complete the payment and send the screenshot in this bot for manual approval.`,
           parse_mode: "HTML",
           reply_markup: cancelKeyboard() as any,
