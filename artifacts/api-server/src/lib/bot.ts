@@ -869,6 +869,27 @@ function setupHandlers(bot: TelegramBot) {
     }
   };
 
+  const extractMessageId = (sent: any): number | null => {
+    const messageId = sent?.message_id ?? sent?.result?.message_id;
+    return typeof messageId === "number" ? messageId : null;
+  };
+
+  const pinPrivateMessage = async (chatId: number, sent: any) => {
+    if (chatId < 0) return;
+    const messageId = extractMessageId(sent);
+    if (!messageId) return;
+    try {
+      const result = await rawTelegramRequest("pinChatMessage", {
+        chat_id: chatId,
+        message_id: messageId,
+        disable_notification: true,
+      });
+      if (!result.ok) logger.warn({ chatId, description: result.description }, "Private welcome pin failed");
+    } catch (err) {
+      logger.warn({ err, chatId }, "Private welcome pin failed");
+    }
+  };
+
   const sendPaymentProofToOwner = async (
     proofMessage: Message,
     user: typeof botUsersTable.$inferSelect,
@@ -906,8 +927,18 @@ function setupHandlers(bot: TelegramBot) {
   };
 
   bot.on("message", async (msg) => {
-    if (!msg.from) return;
     const chatId     = msg.chat.id;
+
+    if (msg.pinned_message && msg.chat.type === "private") {
+      try {
+        await bot.deleteMessage(chatId, msg.message_id);
+      } catch (err) {
+        logger.info({ err, chatId }, "Could not delete private pin service notice");
+      }
+      return;
+    }
+
+    if (!msg.from) return;
     const text       = msg.text?.trim() || "";
     const telegramId = String(msg.from.id);
 
@@ -925,11 +956,12 @@ function setupHandlers(bot: TelegramBot) {
         const allJoined = joinCount === total;
 
         if (allJoined) {
-          await send(
+          const welcome = await send(
             chatId,
             welcomeMessage(user.firstName, user.smsCredits),
             { parse_mode: "HTML", reply_markup: { remove_keyboard: true } }
           );
+          await pinPrivateMessage(chatId, welcome);
           await send(
             chatId,
             forceJoinMessage(joined),
@@ -1870,11 +1902,12 @@ function setupHandlers(bot: TelegramBot) {
           await bot.deleteMessage(chatId, query.message.message_id);
         } catch { /* ignore if already deleted */ }
 
-        await send(
+        const welcome = await send(
           chatId,
           welcomeMessage(user.firstName, user.smsCredits),
           { parse_mode: "HTML", reply_markup: { remove_keyboard: true } }
         );
+        await pinPrivateMessage(chatId, welcome);
 
         await send(
           chatId,
