@@ -27,6 +27,10 @@ const NUMBER_PURCHASE_CREDITS = 5;
 const REFERRAL_REWARD_CREDITS = 20;
 const WEB_PANEL_MIN_CREDITS = 1000;
 const UPI_ID = "gauravpayout@fam";
+const USDT_BINANCE_ID = "1114491025";
+const USDT_BEP20_ADDRESS = "0x430b7abc929366ba7c4e3ca26b6c4177590c0c4f";
+const USDT_TRC20_ADDRESS = "TDfzW7sn7Hut3uQr6Gnk6TyVN2aG6UoUEn";
+const USDT_ERC20_ADDRESS = "0x430b7abc929366ba7c4e3ca26b6c4177590c0c4f";
 
 function cleanBotUsername(username: string): string {
   return username
@@ -504,6 +508,7 @@ function iBtn(opts: {
   url?:    string;
   webAppUrl?: string;
   cb?:     string;
+  copyText?: string;
   style?:  "success" | "danger" | "primary";
 }): any {
   const btn: any = {
@@ -514,6 +519,7 @@ function iBtn(opts: {
   if (opts.url) btn.url           = opts.url;
   if (opts.webAppUrl) btn.web_app = { url: opts.webAppUrl };
   if (opts.cb)  btn.callback_data  = opts.cb;
+  if (opts.copyText) btn.copy_text = { text: opts.copyText };
   return btn;
 }
 
@@ -727,6 +733,7 @@ type PendingCreditPayment = {
   type: "credit_payment";
   credits: number;
   price: number | null;
+  method?: "upi" | "usdt";
 };
 
 function parseStateData<T>(value: string | null): T | null {
@@ -747,6 +754,42 @@ function paymentQrUrl(credits: number, price: number | null): string {
   });
   if (price !== null) params.set("am", String(price));
   return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(`upi://pay?${params.toString()}`)}`;
+}
+
+function paymentMethodKeyboard(): { inline_keyboard: any[][] } {
+  return {
+    inline_keyboard: [
+      [
+        iBtn({ label: "UPI", emojiId: E.money, cb: "paymethod_upi", style: "success" }),
+        iBtn({ label: "USDT", emojiId: E.coin, cb: "paymethod_usdt", style: "primary" }),
+      ],
+    ],
+  };
+}
+
+function usdtKeyboard(): { inline_keyboard: any[][] } {
+  return {
+    inline_keyboard: [
+      [
+        iBtn({ label: "BINANCE ID", emojiId: E.money, copyText: USDT_BINANCE_ID, style: "success" }),
+        iBtn({ label: "TRC20", emojiId: E.star, copyText: USDT_TRC20_ADDRESS, style: "primary" }),
+      ],
+      [
+        iBtn({ label: "BEP20", emojiId: E.star, copyText: USDT_BEP20_ADDRESS, style: "success" }),
+        iBtn({ label: "ERC20", emojiId: E.star, copyText: USDT_ERC20_ADDRESS, style: "danger" }),
+      ],
+    ],
+  };
+}
+
+function paymentMethodMessage(pending: PendingCreditPayment): string {
+  return (
+    `${em(E.buy, "")} <b>SELECT PAYMENT METHOD</b>\n${divider()}\n\n` +
+    `${em(E.credits, "")} <b>PACKAGE:</b> ${pending.credits} CREDITS\n` +
+    `${em(E.money, "")} <b>AMOUNT:</b> ${pending.price !== null ? `₹${pending.price}` : "CUSTOM / MANUAL"}\n\n` +
+    `${em(E.money, "")} UPI QR ke liye <b>UPI</b> dabao.\n` +
+    `${em(E.coin, "")} USDT address ke liye <b>USDT</b> dabao.`
+  );
 }
 
 function numberState(liveSmsReceived = false): string {
@@ -835,6 +878,7 @@ function setupHandlers(bot: TelegramBot) {
       `${em(E.id, "")} <b>ID:</b> <code>${user.telegramId}</code>\n` +
       `${em(E.link, "")} <b>USERNAME:</b> ${user.username ? `@${escapeTelegramHtml(user.username)}` : "N/A"}\n` +
       `${em(E.credits, "")} <b>PACKAGE:</b> ${pending.credits} CREDITS\n` +
+      `${em(E.coin, "")} <b>METHOD:</b> ${(pending.method || "upi").toUpperCase()}\n` +
       `${em(E.money, "")} <b>AMOUNT:</b> ${pending.price !== null ? `₹${pending.price}` : "CUSTOM / MANUAL"}`;
 
     const reply_markup = {
@@ -1526,15 +1570,15 @@ function setupHandlers(bot: TelegramBot) {
       if (text === sct("BUY CREDIT")) {
         await send(
           chatId,
- `${em(E.buy, "")} <b>BUY CREDITS</b>\n` +
+          `${em(E.buy, "")} <b>BUY CREDITS</b>\n` +
           `${divider()}\n\n` +
           `${em(E.credits, "")} <b>SELECT A CREDIT PACKAGE</b>\n` +
-          `UPI QR will be generated instantly after selection.\n\n` +
+          `Package select karne ke baad payment method choose karo: UPI ya USDT.\n\n` +
           `${em(E.money, "")} 100 CREDITS — ₹49\n` +
           `${em(E.money, "")} 500 CREDITS — ₹199\n` +
           `${em(E.money, "")} 1000 CREDITS — ₹349\n` +
           `${em(E.money, "")} 5000 CREDITS — ₹999\n\n` +
-          `${em(E.history, "")} Scan the QR, complete payment, then send the screenshot here for approval.`,
+          `${em(E.history, "")} Payment complete karke screenshot yahi bot mein bhejo for approval.`,
           {
             parse_mode: "HTML",
             reply_markup: {
@@ -1632,18 +1676,10 @@ function setupHandlers(bot: TelegramBot) {
         const pending: PendingCreditPayment = { type: "credit_payment", credits, price: null };
         await db
           .update(botUsersTable)
-          .set({ state: "pending_credit_payment", stateData: JSON.stringify(pending) })
+          .set({ state: "pending_credit_method", stateData: JSON.stringify(pending) })
           .where(eq(botUsersTable.id, user.id));
 
-        await sendPhoto(chatId, paymentQrUrl(credits, null), {
-          caption:
-            `${em(E.buy, "")} <b>PAYMENT QR</b>\n${divider()}\n\n` +
-            `${em(E.credits, "")} <b>PACKAGE:</b> ${credits} CREDITS\n` +
-            `${em(E.money, "")} <b>UPI:</b> <code>${UPI_ID}</code>\n\n` +
-            `${em(E.history, "")} Complete the payment and send the screenshot in this bot for manual approval.`,
-          parse_mode: "HTML",
-          reply_markup: cancelKeyboard() as any,
-        });
+        await send(chatId, paymentMethodMessage(pending), { parse_mode: "HTML", reply_markup: paymentMethodKeyboard() as any });
         return;
       }
 
@@ -1886,25 +1922,60 @@ function setupHandlers(bot: TelegramBot) {
           buy_5000: { credits: 5000, price: 999 },
         };
         const pkg = packages[data];
-        await bot.answerCallbackQuery(query.id, { text: `₹${pkg.price} ke liye UPI QR generate ho raha hai...` });
+        await bot.answerCallbackQuery(query.id, { text: "Payment method choose karo" });
         const [user] = await db.select().from(botUsersTable).where(eq(botUsersTable.telegramId, telegramId));
         if (!user) return;
         const pending: PendingCreditPayment = { type: "credit_payment", credits: pkg.credits, price: pkg.price };
         await db
           .update(botUsersTable)
-          .set({ state: "pending_credit_payment", stateData: JSON.stringify(pending) })
+          .set({ state: "pending_credit_method", stateData: JSON.stringify(pending) })
           .where(eq(botUsersTable.id, user.id));
 
-        await sendPhoto(chatId, paymentQrUrl(pkg.credits, pkg.price), {
+        await send(chatId, paymentMethodMessage(pending), { parse_mode: "HTML", reply_markup: paymentMethodKeyboard() as any });
+        return;
+      }
+
+      if (data === "paymethod_upi" || data === "paymethod_usdt") {
+        await safeAnswer(data === "paymethod_upi" ? "UPI selected" : "USDT selected");
+        const [user] = await db.select().from(botUsersTable).where(eq(botUsersTable.telegramId, telegramId));
+        if (!user) return;
+        const pending = parseStateData<PendingCreditPayment>(user.stateData);
+        if (user.state !== "pending_credit_method" || !pending || pending.type !== "credit_payment") {
+          await send(chatId, `${em(E.warn, "")} PAYMENT SESSION EXPIRED. BUY CREDIT DOBARA TRY KARO.`, { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any });
+          return;
+        }
+
+        const selectedPending: PendingCreditPayment = { ...pending, method: data === "paymethod_upi" ? "upi" : "usdt" };
+        await db
+          .update(botUsersTable)
+          .set({ state: "pending_credit_payment", stateData: JSON.stringify(selectedPending) })
+          .where(eq(botUsersTable.id, user.id));
+
+        if (data === "paymethod_upi") {
+          await sendPhoto(chatId, paymentQrUrl(selectedPending.credits, selectedPending.price), {
           caption:
             `${em(E.buy, "")} <b>PAYMENT QR</b>\n${divider()}\n\n` +
-            `${em(E.credits, "")} <b>PACKAGE:</b> ${pkg.credits} CREDITS\n` +
-            `${em(E.money, "")} <b>AMOUNT:</b> ₹${pkg.price}\n` +
+            `${em(E.credits, "")} <b>PACKAGE:</b> ${selectedPending.credits} CREDITS\n` +
+            `${em(E.money, "")} <b>AMOUNT:</b> ${selectedPending.price !== null ? `₹${selectedPending.price}` : "CUSTOM / MANUAL"}\n` +
             `${em(E.money, "")} <b>UPI:</b> <code>${UPI_ID}</code>\n\n` +
             `${em(E.history, "")} Complete the payment and send the screenshot in this bot for manual approval.`,
           parse_mode: "HTML",
           reply_markup: cancelKeyboard() as any,
-        });
+          });
+        } else {
+          await send(
+            chatId,
+            `${em(E.coin, "")} <b>USDT PAYMENT</b>\n${divider()}\n\n` +
+            `${em(E.credits, "")} <b>PACKAGE:</b> ${selectedPending.credits} CREDITS\n` +
+            `${em(E.money, "")} <b>AMOUNT:</b> ${selectedPending.price !== null ? `₹${selectedPending.price}` : "CUSTOM / MANUAL"}\n\n` +
+            `${em(E.money, "")} <b>BINANCE ID</b>\n<code>${USDT_BINANCE_ID}</code>\n\n` +
+            `${em(E.star, "")} <b>BSC / BNB - BEP20</b>\n<code>${USDT_BEP20_ADDRESS}</code>\n\n` +
+            `${em(E.star, "")} <b>TRX / TRON - TRC20</b>\n<code>${USDT_TRC20_ADDRESS}</code>\n\n` +
+            `${em(E.star, "")} <b>ETH / ETHEREUM - ERC20</b>\n<code>${USDT_ERC20_ADDRESS}</code>\n\n` +
+            `${em(E.history, "")} Address copy karo, payment complete karo, phir screenshot yahi bot mein bhejo for approval.`,
+            { parse_mode: "HTML", reply_markup: usdtKeyboard() as any }
+          );
+        }
         return;
       }
 
