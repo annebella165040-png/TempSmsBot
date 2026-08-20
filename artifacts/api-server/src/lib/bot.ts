@@ -21,7 +21,7 @@ import { createMiniAppLicense } from "./miniAppLicense";
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const BOT_USERNAME  = process.env.BOT_USERNAME  || "AnneBella_Sms_Panel_Bot";
 const DEVELOPER     = "@annebella";
-const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID || process.env.ADMIN_CHAT_ID || DEVELOPER;
+const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID || process.env.ADMIN_CHAT_ID || "8210676512";
 const FREE_START_CREDITS = 100;
 const NUMBER_PURCHASE_CREDITS = 5;
 const REFERRAL_REWARD_CREDITS = 20;
@@ -219,16 +219,33 @@ const SC_MAP: Record<string, string> = {
   J:"ᴊ", K:"ᴋ", L:"ʟ", M:"ᴍ", N:"ɴ", O:"ᴏ", P:"ᴘ", Q:"ǫ", R:"ʀ",
   S:"ꜱ", T:"ᴛ", U:"ᴜ", V:"ᴠ", W:"ᴡ", X:"x",  Y:"ʏ", Z:"ᴢ",
 };
+const SC_REVERSE_MAP = Object.fromEntries(Object.entries(SC_MAP).map(([plain, small]) => [small, plain.toLowerCase()]));
 
-// HTML-aware small caps: skips content inside < > angle brackets
+function normalizeSmallCaps(text: string): string {
+  return text.split("").map((c) => SC_REVERSE_MAP[c] ?? c).join("");
+}
+
+function referralFromStartParam(param?: string | null): string | null {
+  const normalized = normalizeSmallCaps((param || "").trim());
+  return /^ref_\d{4,}$/.test(normalized) ? normalized : null;
+}
+
+// HTML-aware small caps: skips tags and literal code/pre content.
 function sc(html: string): string {
   let out = "";
   let inTag = false;
+  let literalTag: "code" | "pre" | null = null;
   for (let i = 0; i < html.length; i++) {
+    const rest = html.slice(i).toLowerCase();
+    if (!inTag && rest.startsWith("<code")) literalTag = "code";
+    if (!inTag && rest.startsWith("<pre")) literalTag = "pre";
+    if (!inTag && rest.startsWith("</code>")) literalTag = null;
+    if (!inTag && rest.startsWith("</pre>")) literalTag = null;
     const c = html[i];
     if (c === "<")       { inTag = true;  out += c; }
     else if (c === ">")  { inTag = false; out += c; }
     else if (inTag)      { out += c; }
+    else if (literalTag) { out += c; }
     else                 { out += SC_MAP[c] ?? c; }
   }
   return out;
@@ -796,6 +813,41 @@ function setupHandlers(bot: TelegramBot) {
     }
   };
 
+  const sendPaymentProofToOwner = async (
+    proofMessage: Message,
+    user: typeof botUsersTable.$inferSelect,
+    pending: PendingCreditPayment,
+  ) => {
+    const caption =
+      `${em(E.buy, "")} <b>BUY CREDIT REQUEST</b>\n${divider()}\n\n` +
+      `${em(E.profile, "")} <b>USER:</b> ${escapeTelegramHtml(user.firstName)}\n` +
+      `${em(E.id, "")} <b>ID:</b> <code>${user.telegramId}</code>\n` +
+      `${em(E.link, "")} <b>USERNAME:</b> ${user.username ? `@${escapeTelegramHtml(user.username)}` : "N/A"}\n` +
+      `${em(E.credits, "")} <b>PACKAGE:</b> ${pending.credits} CREDITS\n` +
+      `${em(E.money, "")} <b>AMOUNT:</b> ${pending.price !== null ? `₹${pending.price}` : "CUSTOM / MANUAL"}`;
+
+    const reply_markup = {
+      inline_keyboard: [[
+        iBtn({ label: "APPROVE", emojiId: E.check, cb: `pay_approve_${user.telegramId}_${pending.credits}`, style: "success" }),
+        iBtn({ label: "DECLINE", emojiId: E.warn, cb: `pay_decline_${user.telegramId}_${pending.credits}`, style: "danger" }),
+      ]],
+    };
+
+    try {
+      await bot.copyMessage(OWNER_CHAT_ID, proofMessage.chat.id, proofMessage.message_id, {
+        caption,
+        parse_mode: "HTML",
+        reply_markup,
+      } as any);
+    } catch (err) {
+      logger.warn({ err, ownerChatId: OWNER_CHAT_ID, userId: user.telegramId }, "HTML payment proof copy failed, retrying as plain text");
+      await bot.copyMessage(OWNER_CHAT_ID, proofMessage.chat.id, proofMessage.message_id, {
+        caption: stripHtmlToText(sc(caption)),
+        reply_markup,
+      } as any);
+    }
+  };
+
   bot.on("message", async (msg) => {
     if (!msg.from) return;
     const chatId     = msg.chat.id;
@@ -805,8 +857,9 @@ function setupHandlers(bot: TelegramBot) {
     try {
       // â”€â”€ /start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (text.startsWith("/start")) {
-        const param      = text.split(" ")[1] || null;
-        const referredBy = param?.startsWith("ref_") ? param : null;
+        const param      = text.split(/\s+/)[1] || null;
+        const referredBy = referralFromStartParam(param);
+        const user = await getOrCreateUser(msg, referredBy);
 
         // Check which channels user has already joined
         const joined    = await checkMembership(bot, telegramId);
@@ -815,7 +868,6 @@ function setupHandlers(bot: TelegramBot) {
         const allJoined = joinCount === total;
 
         if (allJoined) {
-          const user = await getOrCreateUser(msg, referredBy);
           await send(
             chatId,
             welcomeMessage(user.firstName, user.smsCredits),
@@ -877,7 +929,7 @@ function setupHandlers(bot: TelegramBot) {
           return;
         }
 
-        if (!msg.photo?.length) {
+        if (!msg.photo?.length && !msg.document) {
           await send(
             chatId,
             `${em(E.buy, "")} <b>PAYMENT SCREENSHOT BHEJO.</b>\n\n` +
@@ -888,28 +940,10 @@ function setupHandlers(bot: TelegramBot) {
           return;
         }
 
-        const bestPhoto = msg.photo[msg.photo.length - 1].file_id;
+        let ownerNotified = false;
         try {
-          await sendPhoto(
-            OWNER_CHAT_ID,
-            bestPhoto,
-            {
-              caption:
-                `${em(E.buy, "")} <b>BUY CREDIT REQUEST</b>\n${divider()}\n\n` +
-                `${em(E.profile, "")} <b>USER:</b> ${escapeTelegramHtml(user.firstName)}\n` +
-                `${em(E.id, "")} <b>ID:</b> <code>${user.telegramId}</code>\n` +
-                `${em(E.link, "")} <b>USERNAME:</b> ${user.username ? `@${escapeTelegramHtml(user.username)}` : "N/A"}\n` +
-                `${em(E.credits, "")} <b>PACKAGE:</b> ${pending.credits} CREDITS\n` +
-                `${em(E.money, "")} <b>AMOUNT:</b> ${pending.price !== null ? `₹${pending.price}` : "CUSTOM / MANUAL"}`,
-              parse_mode: "HTML",
-              reply_markup: {
-                inline_keyboard: [[
-                  iBtn({ label: "APPROVE", emojiId: E.check, cb: `pay_approve_${user.telegramId}_${pending.credits}`, style: "success" }),
-                  iBtn({ label: "DECLINE", emojiId: E.warn, cb: `pay_decline_${user.telegramId}_${pending.credits}`, style: "danger" }),
-                ]],
-              },
-            }
-          );
+          await sendPaymentProofToOwner(msg, user, pending);
+          ownerNotified = true;
         } catch (err) {
           logger.error({ err, ownerChatId: OWNER_CHAT_ID, userId: user.telegramId }, "Failed to notify owner about credit payment");
         }
@@ -918,7 +952,7 @@ function setupHandlers(bot: TelegramBot) {
         await send(
           chatId,
           `${em(E.check, "")} <b>SCREENSHOT RECEIVED</b>\n${divider()}\n\n` +
-          `${em(E.refresh, "")} YOUR PAYMENT IS UNDER REVIEW.\n` +
+          `${em(E.refresh, "")} ${ownerNotified ? "YOUR PAYMENT IS UNDER REVIEW." : "OWNER NOTIFICATION FAILED. PLEASE CONTACT SUPPORT."}\n` +
           `${em(E.credits, "")} CREDITS WILL BE ADDED AFTER OWNER APPROVAL.`,
           { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
         );
