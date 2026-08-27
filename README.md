@@ -51,6 +51,7 @@ Copy `.env.example` to `.env` for local development and set:
 | `OWNER_CHAT_ID` / `ADMIN_CHAT_ID` | Recommended | Owner/admin Telegram chat ID for payment approval notifications |
 | `SMS_LOG_GROUP_ID` | No | Telegram group ID for live SMS logs; defaults to the configured AnneBella logs group |
 | `SMS_LOG_GET_NUMBER_URL` | No | URL used by the SMS log `GET NUMBER` button; defaults to `https://t.me/Annebellasmsbot?start=promo` |
+| `MINI_APP_LICENSE_SECRET` | Recommended | Stable secret for mini-app license URLs; keep the same value across redeploys |
 | `NODE_ENV` | No | Use `production` on hosted services |
 | `LOG_LEVEL` | No | Pino log level; defaults to `info` |
 | `PORT` | No | Supplied automatically by Heroku, Railway, and Replit |
@@ -139,6 +140,10 @@ git push heroku main
    - `BOT_USERNAME`
    - `NODE_ENV=production`
    - `DATABASE_URL` to the PostgreSQL service connection string. In Railway, use the PostgreSQL service variable reference, for example `${{Postgres.DATABASE_URL}}`.
+   - `OWNER_CHAT_ID=8210676512` for payment screenshot approval notifications.
+   - `PUBLIC_APP_URL=https://your-railway-domain` if Railway does not expose `RAILWAY_PUBLIC_DOMAIN` correctly.
+   - `SMS_LOG_GROUP_ID=-1002847599431` and `SMS_LOG_GET_NUMBER_URL=https://t.me/Annebellasmsbot?start=promo` for live SMS log buttons.
+   - `MINI_APP_LICENSE_SECRET` as a strong random value if you use the Telegram mini app.
 4. Deploy and open the generated public domain. The admin panel is available at `/`, `/admin`, and `/admin/login`.
 5. Railway runs the database schema push automatically before starting the service:
 
