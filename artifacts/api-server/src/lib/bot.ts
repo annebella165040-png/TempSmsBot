@@ -17,6 +17,12 @@ import * as fs from "fs";
 import * as path from "path";
 import { logger } from "./logger";
 import { createMiniAppLicense } from "./miniAppLicense";
+import {
+  getPaymentSettings,
+  isUpiAvailable,
+  isUsdtAvailable,
+  type PaymentSettings,
+} from "./paymentSettings";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const BOT_USERNAME  = process.env.BOT_USERNAME  || "AnneBella_Sms_Panel_Bot";
@@ -26,11 +32,6 @@ const FREE_START_CREDITS = 100;
 const NUMBER_PURCHASE_CREDITS = 5;
 const REFERRAL_REWARD_CREDITS = 20;
 const WEB_PANEL_MIN_CREDITS = 1000;
-const UPI_ID = "gauravpayout@fam";
-const USDT_BINANCE_ID = "1114491025";
-const USDT_BEP20_ADDRESS = "0x430b7abc929366ba7c4e3ca26b6c4177590c0c4f";
-const USDT_TRC20_ADDRESS = "TDfzW7sn7Hut3uQr6Gnk6TyVN2aG6UoUEn";
-const USDT_ERC20_ADDRESS = "0x430b7abc929366ba7c4e3ca26b6c4177590c0c4f";
 
 function cleanBotUsername(username: string): string {
   return username
@@ -747,9 +748,9 @@ function parseStateData<T>(value: string | null): T | null {
   }
 }
 
-function paymentQrUrl(credits: number, price: number | null): string {
+function paymentQrUrl(settings: PaymentSettings, credits: number, price: number | null): string {
   const params = new URLSearchParams({
-    pa: UPI_ID,
+    pa: settings.upiId,
     pn: "Gaurav",
     cu: "INR",
     tn: `AnneBella ${credits} Credits`,
@@ -758,39 +759,41 @@ function paymentQrUrl(credits: number, price: number | null): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(`upi://pay?${params.toString()}`)}`;
 }
 
-function paymentMethodKeyboard(): { inline_keyboard: any[][] } {
+function paymentMethodKeyboard(settings: PaymentSettings): { inline_keyboard: any[][] } {
   return {
     inline_keyboard: [
       [
-        iBtn({ label: "UPI", emojiId: E.upi, cb: "paymethod_upi", style: "success" }),
-        iBtn({ label: "USDT", emojiId: E.usdt, cb: "paymethod_usdt", style: "primary" }),
+        iBtn({ label: isUpiAvailable(settings) ? "UPI" : "UPI OFF", emojiId: E.upi, cb: "paymethod_upi", style: isUpiAvailable(settings) ? "success" : "danger" }),
+        iBtn({ label: isUsdtAvailable(settings) ? "USDT" : "USDT OFF", emojiId: E.usdt, cb: "paymethod_usdt", style: isUsdtAvailable(settings) ? "primary" : "danger" }),
       ],
     ],
   };
 }
 
-function usdtKeyboard(): { inline_keyboard: any[][] } {
+function usdtKeyboard(settings: PaymentSettings): { inline_keyboard: any[][] } {
   return {
     inline_keyboard: [
       [
-        iBtn({ label: "BINANCE ID", emojiId: E.binance, copyText: USDT_BINANCE_ID, style: "success" }),
-        iBtn({ label: "TRC20", emojiId: E.star, copyText: USDT_TRC20_ADDRESS, style: "primary" }),
+        iBtn({ label: "BINANCE ID", emojiId: E.binance, copyText: settings.usdtBinanceId, style: "success" }),
+        iBtn({ label: "TRC20", emojiId: E.star, copyText: settings.usdtTrc20Address, style: "primary" }),
       ],
       [
-        iBtn({ label: "BEP20", emojiId: E.star, copyText: USDT_BEP20_ADDRESS, style: "success" }),
-        iBtn({ label: "ERC20", emojiId: E.star, copyText: USDT_ERC20_ADDRESS, style: "danger" }),
+        iBtn({ label: "BEP20", emojiId: E.star, copyText: settings.usdtBep20Address, style: "success" }),
+        iBtn({ label: "ERC20", emojiId: E.star, copyText: settings.usdtErc20Address, style: "danger" }),
       ],
     ],
   };
 }
 
-function paymentMethodMessage(pending: PendingCreditPayment): string {
+function paymentMethodMessage(pending: PendingCreditPayment, settings: PaymentSettings): string {
+  const upiStatus = isUpiAvailable(settings) ? "AVAILABLE" : "TEMPORARILY UNAVAILABLE";
+  const usdtStatus = isUsdtAvailable(settings) ? "AVAILABLE" : "TEMPORARILY UNAVAILABLE";
   return (
     `${em(E.buy, "")} <b>SELECT PAYMENT METHOD</b>\n${divider()}\n\n` +
     `${em(E.credits, "")} <b>PACKAGE:</b> ${pending.credits} CREDITS\n` +
     `${em(E.money, "")} <b>AMOUNT:</b> ${pending.price !== null ? `₹${pending.price}` : "CUSTOM / MANUAL"}\n\n` +
-    `${em(E.upi, "")} UPI QR ke liye <b>UPI</b> dabao.\n` +
-    `${em(E.usdt, "")} USDT address ke liye <b>USDT</b> dabao.`
+    `${em(E.upi, "")} <b>UPI:</b> ${upiStatus}\n` +
+    `${em(E.usdt, "")} <b>USDT:</b> ${usdtStatus}`
   );
 }
 
@@ -869,27 +872,6 @@ function setupHandlers(bot: TelegramBot) {
     }
   };
 
-  const extractMessageId = (sent: any): number | null => {
-    const messageId = sent?.message_id ?? sent?.result?.message_id;
-    return typeof messageId === "number" ? messageId : null;
-  };
-
-  const pinPrivateMessage = async (chatId: number, sent: any) => {
-    if (chatId < 0) return;
-    const messageId = extractMessageId(sent);
-    if (!messageId) return;
-    try {
-      const result = await rawTelegramRequest("pinChatMessage", {
-        chat_id: chatId,
-        message_id: messageId,
-        disable_notification: true,
-      });
-      if (!result.ok) logger.warn({ chatId, description: result.description }, "Private welcome pin failed");
-    } catch (err) {
-      logger.warn({ err, chatId }, "Private welcome pin failed");
-    }
-  };
-
   const sendPaymentProofToOwner = async (
     proofMessage: Message,
     user: typeof botUsersTable.$inferSelect,
@@ -927,18 +909,8 @@ function setupHandlers(bot: TelegramBot) {
   };
 
   bot.on("message", async (msg) => {
-    const chatId     = msg.chat.id;
-
-    if (msg.pinned_message && msg.chat.type === "private") {
-      try {
-        await bot.deleteMessage(chatId, msg.message_id);
-      } catch (err) {
-        logger.info({ err, chatId }, "Could not delete private pin service notice");
-      }
-      return;
-    }
-
     if (!msg.from) return;
+    const chatId     = msg.chat.id;
     const text       = msg.text?.trim() || "";
     const telegramId = String(msg.from.id);
 
@@ -956,12 +928,11 @@ function setupHandlers(bot: TelegramBot) {
         const allJoined = joinCount === total;
 
         if (allJoined) {
-          const welcome = await send(
+          await send(
             chatId,
             welcomeMessage(user.firstName, user.smsCredits),
             { parse_mode: "HTML", reply_markup: { remove_keyboard: true } }
           );
-          await pinPrivateMessage(chatId, welcome);
           await send(
             chatId,
             forceJoinMessage(joined),
@@ -1725,7 +1696,8 @@ function setupHandlers(bot: TelegramBot) {
           .set({ state: "pending_credit_method", stateData: JSON.stringify(pending) })
           .where(eq(botUsersTable.id, user.id));
 
-        await send(chatId, paymentMethodMessage(pending), { parse_mode: "HTML", reply_markup: paymentMethodKeyboard() as any });
+        const paymentSettings = await getPaymentSettings();
+        await send(chatId, paymentMethodMessage(pending, paymentSettings), { parse_mode: "HTML", reply_markup: paymentMethodKeyboard(paymentSettings) as any });
         return;
       }
 
@@ -1902,12 +1874,11 @@ function setupHandlers(bot: TelegramBot) {
           await bot.deleteMessage(chatId, query.message.message_id);
         } catch { /* ignore if already deleted */ }
 
-        const welcome = await send(
+        await send(
           chatId,
           welcomeMessage(user.firstName, user.smsCredits),
           { parse_mode: "HTML", reply_markup: { remove_keyboard: true } }
         );
-        await pinPrivateMessage(chatId, welcome);
 
         await send(
           chatId,
@@ -1978,7 +1949,8 @@ function setupHandlers(bot: TelegramBot) {
           .set({ state: "pending_credit_method", stateData: JSON.stringify(pending) })
           .where(eq(botUsersTable.id, user.id));
 
-        await send(chatId, paymentMethodMessage(pending), { parse_mode: "HTML", reply_markup: paymentMethodKeyboard() as any });
+        const paymentSettings = await getPaymentSettings();
+        await send(chatId, paymentMethodMessage(pending, paymentSettings), { parse_mode: "HTML", reply_markup: paymentMethodKeyboard(paymentSettings) as any });
         return;
       }
 
@@ -1993,18 +1965,38 @@ function setupHandlers(bot: TelegramBot) {
         }
 
         const selectedPending: PendingCreditPayment = { ...pending, method: data === "paymethod_upi" ? "upi" : "usdt" };
+        const paymentSettings = await getPaymentSettings();
+        if (data === "paymethod_upi" && !isUpiAvailable(paymentSettings)) {
+          await send(
+            chatId,
+            `${em(E.warn, "")} <b>UPI TEMPORARILY UNAVAILABLE</b>\n${divider()}\n\n` +
+            `Admin ne abhi UPI payment info blank rakhi hai. Thodi der baad try karo ya doosra payment method choose karo.`,
+            { parse_mode: "HTML", reply_markup: paymentMethodKeyboard(paymentSettings) as any },
+          );
+          return;
+        }
+        if (data === "paymethod_usdt" && !isUsdtAvailable(paymentSettings)) {
+          await send(
+            chatId,
+            `${em(E.warn, "")} <b>USDT TEMPORARILY UNAVAILABLE</b>\n${divider()}\n\n` +
+            `Admin ne abhi USDT/Binance payment info complete nahi rakhi hai. Thodi der baad try karo ya doosra payment method choose karo.`,
+            { parse_mode: "HTML", reply_markup: paymentMethodKeyboard(paymentSettings) as any },
+          );
+          return;
+        }
+
         await db
           .update(botUsersTable)
           .set({ state: "pending_credit_payment", stateData: JSON.stringify(selectedPending) })
           .where(eq(botUsersTable.id, user.id));
 
         if (data === "paymethod_upi") {
-          await sendPhoto(chatId, paymentQrUrl(selectedPending.credits, selectedPending.price), {
+          await sendPhoto(chatId, paymentQrUrl(paymentSettings, selectedPending.credits, selectedPending.price), {
           caption:
             `${em(E.buy, "")} <b>PAYMENT QR</b>\n${divider()}\n\n` +
             `${em(E.credits, "")} <b>PACKAGE:</b> ${selectedPending.credits} CREDITS\n` +
             `${em(E.money, "")} <b>AMOUNT:</b> ${selectedPending.price !== null ? `₹${selectedPending.price}` : "CUSTOM / MANUAL"}\n` +
-            `${em(E.upi, "")} <b>UPI:</b> <code>${UPI_ID}</code>\n\n` +
+            `${em(E.upi, "")} <b>UPI:</b> <code>${paymentSettings.upiId}</code>\n\n` +
             `${em(E.history, "")} Complete the payment and send the screenshot in this bot for manual approval.`,
           parse_mode: "HTML",
           reply_markup: cancelKeyboard() as any,
@@ -2015,12 +2007,12 @@ function setupHandlers(bot: TelegramBot) {
             `${em(E.usdt, "")} <b>USDT PAYMENT</b>\n${divider()}\n\n` +
             `${em(E.credits, "")} <b>PACKAGE:</b> ${selectedPending.credits} CREDITS\n` +
             `${em(E.money, "")} <b>AMOUNT:</b> ${selectedPending.price !== null ? `₹${selectedPending.price}` : "CUSTOM / MANUAL"}\n\n` +
-            `${em(E.binance, "")} <b>BINANCE ID</b>\n<code>${USDT_BINANCE_ID}</code>\n\n` +
-            `${em(E.star, "")} <b>BSC / BNB - BEP20</b>\n<code>${USDT_BEP20_ADDRESS}</code>\n\n` +
-            `${em(E.star, "")} <b>TRX / TRON - TRC20</b>\n<code>${USDT_TRC20_ADDRESS}</code>\n\n` +
-            `${em(E.star, "")} <b>ETH / ETHEREUM - ERC20</b>\n<code>${USDT_ERC20_ADDRESS}</code>\n\n` +
+            `${em(E.binance, "")} <b>BINANCE ID</b>\n<code>${paymentSettings.usdtBinanceId}</code>\n\n` +
+            `${em(E.star, "")} <b>BSC / BNB - BEP20</b>\n<code>${paymentSettings.usdtBep20Address}</code>\n\n` +
+            `${em(E.star, "")} <b>TRX / TRON - TRC20</b>\n<code>${paymentSettings.usdtTrc20Address}</code>\n\n` +
+            `${em(E.star, "")} <b>ETH / ETHEREUM - ERC20</b>\n<code>${paymentSettings.usdtErc20Address}</code>\n\n` +
             `${em(E.history, "")} Address copy karo, payment complete karo, phir screenshot yahi bot mein bhejo for approval.`,
-            { parse_mode: "HTML", reply_markup: usdtKeyboard() as any }
+            { parse_mode: "HTML", reply_markup: usdtKeyboard(paymentSettings) as any }
           );
         }
         return;
