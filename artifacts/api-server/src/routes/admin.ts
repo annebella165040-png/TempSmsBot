@@ -741,6 +741,20 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
       <!-- GIFT CARDS -->
       <div class="section" id="tab-giftcards">
         <div class="card">
+          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>Payment Info</span></div>
+          <div class="card-body">
+            <div class="form-grid c3">
+              <div class="form-group"><label>UPI ID</label><input id="pay-upi" placeholder="gauravpayout@fam"/></div>
+              <div class="form-group"><label>Binance ID</label><input id="pay-binance" placeholder="1114491025"/></div>
+              <div class="form-group"><label>TRC20 Address</label><input id="pay-trc20" placeholder="TRC20 USDT address"/></div>
+              <div class="form-group"><label>BEP20 Address</label><input id="pay-bep20" placeholder="BEP20 USDT address"/></div>
+              <div class="form-group"><label>ERC20 Address</label><input id="pay-erc20" placeholder="ERC20 USDT address"/></div>
+              <div class="form-group"><label>Status</label><div id="pay-status" class="empty" style="min-height:42px;display:flex;align-items:center">Loading payment info...</div></div>
+            </div>
+            <button class="btn btn-success btn-full" onclick="savePaymentSettings()"><span id="pay-spin" style="display:none" class="spin"></span><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>Save Payment Info</button>
+          </div>
+        </div>
+        <div class="card">
           <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Create Task</span></div>
           <div class="card-body">
             <div class="form-grid c3">
@@ -854,7 +868,7 @@ function switchTab(tab){
   if(tab==='dashboard')loadDashboard();
   if(tab==='panels')loadPanels();
   if(tab==='users')loadUsers();
-  if(tab==='giftcards'){loadGiftCards();loadTasks();}
+  if(tab==='giftcards'){loadGiftCards();loadTasks();loadPaymentSettings();}
   if(tab==='channels')loadChannels();
 }
 document.querySelectorAll('.nav-item,.bnav-item').forEach(n=>n.addEventListener('click',()=>switchTab(n.dataset.tab)));
@@ -950,6 +964,9 @@ async function copyUser(id){const u=_all.find(x=>x.id===id);if(!u)return;const t
 function exportUsers(){const rows=filteredUsers();const header=['Name','Username','Telegram ID','Credits','Refs','SMS','Web Expires','Number Expires','Banned','Joined'];const csv=[header].concat(rows.map(u=>[u.firstName||'',u.username||'',u.telegramId,u.smsCredits||0,u.referralCount||0,u.sendSmsUnlocked?'yes':'no',u.webPanelExpiresAt||'',u.getNumberExpiresAt||'',u.isBanned?'yes':'no',u.createdAt||''])).map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='annebella-users.csv';a.click();URL.revokeObjectURL(a.href);toast('CSV exported');}
 async function bulkCredits(mode){const rows=filteredUsers();if(!rows.length){toast('No users selected',false);return;}const amt=parseInt(prompt((mode==='set'?'Set':'Add')+' credits for '+rows.length+' filtered users:'));if(isNaN(amt)||amt<0)return;if(!confirm((mode==='set'?'Set ':'Add ')+amt+' credits for '+rows.length+' users?'))return;let ok=0;for(const u of rows){const next=mode==='set'?amt:(u.smsCredits||0)+amt;const r=await fetch(B+'/api/users/'+u.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({smsCredits:next})});if(r.ok)ok++;}toast('Updated '+ok+'/'+rows.length+' users');loadUsers();}
 function genCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<12;i++){if(i&&i%4===0)s+='-';s+=c[Math.floor(Math.random()*c.length)];}document.getElementById('gc-code').value=s;}
+function paymentStatusText(d){const upi=!!(d.upiId||'').trim(),usdt=!!(d.usdtBinanceId||'').trim()&&!!(d.usdtTrc20Address||'').trim()&&!!(d.usdtBep20Address||'').trim()&&!!(d.usdtErc20Address||'').trim();return 'UPI: '+(upi?'Active':'Temporary unavailable')+' / USDT: '+(usdt?'Active':'Temporary unavailable');}
+async function loadPaymentSettings(){try{const d=await(await fetch(B+'/api/settings/payment',{cache:'no-store'})).json();document.getElementById('pay-upi').value=d.upiId||'';document.getElementById('pay-binance').value=d.usdtBinanceId||'';document.getElementById('pay-trc20').value=d.usdtTrc20Address||'';document.getElementById('pay-bep20').value=d.usdtBep20Address||'';document.getElementById('pay-erc20').value=d.usdtErc20Address||'';document.getElementById('pay-status').textContent=paymentStatusText(d);}catch{document.getElementById('pay-status').textContent='Payment info load failed';toast('Payment info load failed',false);}}
+async function savePaymentSettings(){const sp=document.getElementById('pay-spin');sp.style.display='';const body={upiId:document.getElementById('pay-upi').value.trim(),usdtBinanceId:document.getElementById('pay-binance').value.trim(),usdtTrc20Address:document.getElementById('pay-trc20').value.trim(),usdtBep20Address:document.getElementById('pay-bep20').value.trim(),usdtErc20Address:document.getElementById('pay-erc20').value.trim()};try{const r=await fetch(B+'/api/settings/payment',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(r.ok){document.getElementById('pay-status').textContent=paymentStatusText(d);toast('Payment info saved');}else toast(d.error||'Payment save failed',false);}catch{toast('Network error',false);}finally{sp.style.display='none';}}
 async function createTask(){const title=document.getElementById('task-title').value.trim(),description=document.getElementById('task-desc').value.trim(),url=document.getElementById('task-url').value.trim(),taskType=document.getElementById('task-type').value,rewardCredits=parseInt(document.getElementById('task-reward').value||'0');if(!title||!url){toast('Task title and URL required',false);return;}const sp=document.getElementById('task-spin');sp.style.display='';try{const r=await fetch(B+'/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,description,url,taskType,rewardCredits:isNaN(rewardCredits)?0:rewardCredits})});const d=await r.json();if(r.ok){toast('Task created');['task-title','task-desc','task-url','task-reward'].forEach(id=>document.getElementById(id).value='');loadTasks();}else toast(d.error||'Task failed',false);}catch{toast('Network error',false);}finally{sp.style.display='none';}}
 async function loadTasks(){try{const tasks=await(await fetch(B+'/api/tasks')).json();const tb=document.getElementById('task-tbody');if(!tasks.length){tb.innerHTML='<tr><td colspan="5" class="empty">No tasks</td></tr>';return;}tb.innerHTML=tasks.map(t=>\`<tr><td><b>\${esc(t.title)}</b><div style="color:var(--dim);font-size:.68rem;max-width:260px;overflow:hidden;text-overflow:ellipsis">\${esc(t.url)}</div></td><td><span class="badge b-active">\${esc(t.taskType)}</span></td><td>\${t.rewardCredits||0} cr</td><td><span class="badge \${t.isActive?'b-free':'b-used'}">\${t.isActive?'Active':'Hidden'}</span></td><td><div class="user-actions" style="min-width:150px"><button class="btn btn-primary btn-sm" onclick="toggleTask(\${t.id},\${!t.isActive})">\${t.isActive?'Hide':'Show'}</button><button class="btn btn-danger btn-sm" onclick="deleteTask(\${t.id})">Del</button></div></td></tr>\`).join('');}catch{toast('Tasks load failed',false);}}
 async function toggleTask(id,isActive){try{const r=await fetch(B+'/api/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({isActive})});if(r.ok){toast('Task updated');loadTasks();}else toast('Task update failed',false);}catch{toast('Network error',false);}}
