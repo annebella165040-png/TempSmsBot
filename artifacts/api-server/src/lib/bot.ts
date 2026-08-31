@@ -4,7 +4,7 @@
   type Message,
   type Update,
 } from "node-telegram-bot-api";
-import { db, botUsersTable, panelsTable, giftCardsTable, referralsTable } from "@workspace/db";
+import { db, pool, botUsersTable, panelsTable, giftCardsTable, referralsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import {
   fetchPanelDevices,
@@ -17,12 +17,6 @@ import * as fs from "fs";
 import * as path from "path";
 import { logger } from "./logger";
 import { createMiniAppLicense } from "./miniAppLicense";
-import {
-  getPaymentSettings,
-  isUpiAvailable,
-  isUsdtAvailable,
-  type PaymentSettings,
-} from "./paymentSettings";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const BOT_USERNAME  = process.env.BOT_USERNAME  || "AnneBella_Sms_Panel_Bot";
@@ -32,6 +26,66 @@ const FREE_START_CREDITS = 100;
 const NUMBER_PURCHASE_CREDITS = 5;
 const REFERRAL_REWARD_CREDITS = 20;
 const WEB_PANEL_MIN_CREDITS = 1000;
+
+type PaymentSettings = {
+  upiId: string;
+  usdtBinanceId: string;
+  usdtBep20Address: string;
+  usdtTrc20Address: string;
+  usdtErc20Address: string;
+};
+
+const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
+  upiId: "gauravpayout@fam",
+  usdtBinanceId: "1114491025",
+  usdtBep20Address: "0x430b7abc929366ba7c4e3ca26b6c4177590c0c4f",
+  usdtTrc20Address: "TDfzW7sn7Hut3uQr6Gnk6TyVN2aG6UoUEn",
+  usdtErc20Address: "0x430b7abc929366ba7c4e3ca26b6c4177590c0c4f",
+};
+
+let paymentSettingsReady = false;
+
+async function ensurePaymentSettingsStorage(): Promise<void> {
+  if (paymentSettingsReady) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key text PRIMARY KEY,
+      value text NOT NULL DEFAULT '',
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  paymentSettingsReady = true;
+}
+
+function paymentSettingKey(key: keyof PaymentSettings): string {
+  return `payment.${key}`;
+}
+
+function isUpiAvailable(settings: PaymentSettings): boolean {
+  return settings.upiId.trim().length > 0;
+}
+
+function isUsdtAvailable(settings: PaymentSettings): boolean {
+  return Boolean(
+    settings.usdtBinanceId.trim() &&
+    settings.usdtBep20Address.trim() &&
+    settings.usdtTrc20Address.trim() &&
+    settings.usdtErc20Address.trim(),
+  );
+}
+
+async function getPaymentSettings(): Promise<PaymentSettings> {
+  await ensurePaymentSettingsStorage();
+  const result = await pool.query<{ key: string; value: string }>(
+    "SELECT key, value FROM app_settings WHERE key LIKE 'payment.%'",
+  );
+  const settings: PaymentSettings = { ...DEFAULT_PAYMENT_SETTINGS };
+  for (const row of result.rows) {
+    const key = row.key.replace(/^payment\./, "") as keyof PaymentSettings;
+    if (key in settings) settings[key] = row.value;
+  }
+  return settings;
+}
 
 function cleanBotUsername(username: string): string {
   return username
