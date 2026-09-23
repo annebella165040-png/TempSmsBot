@@ -1,6 +1,7 @@
 import app from "./app";
 import { initBot } from "./lib/bot";
 import { logger } from "./lib/logger";
+import { ensureCoreDatabaseSchema } from "./lib/schemaBootstrap";
 import { startSmsLogWatcher } from "./lib/smsLogWatcher";
 
 const rawPort = process.env["PORT"];
@@ -19,13 +20,20 @@ if (Number.isNaN(port) || port <= 0) {
 
 const host = process.env["HOST"] ?? "0.0.0.0";
 
-app.listen(port, host, (err) => {
+app.listen(port, host, async (err) => {
   if (err) {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
   }
 
   logger.info({ host, port }, "Server listening");
+
+  try {
+    await ensureCoreDatabaseSchema();
+    logger.info("Core database schema ready");
+  } catch (err) {
+    logger.error({ err }, "Core database schema bootstrap failed");
+  }
 
   // Start polling only after HTTP is listening. A Telegram outage or invalid
   // token must not prevent Railway from reaching the admin panel/healthcheck.
