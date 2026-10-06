@@ -44,16 +44,13 @@ Copy `.env.example` to `.env` for local development and set:
 | --- | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Yes | Private token created by BotFather |
 | `ADMIN_PASSWORD` | Yes | Password for `/admin/login` |
-| `DATABASE_URL` | Yes when `NEON_DATABASE_URL` is blank | PostgreSQL connection string |
-| `NEON_DATABASE_URL` | Recommended for Neon | Preferred Neon PostgreSQL connection string; overrides `DATABASE_URL` when set |
+| `DATABASE_URL` | Yes on Railway | PostgreSQL connection string |
+| `NEON_DATABASE_URL` | Optional | Replit demo fallback for a Neon PostgreSQL connection |
 | `BOT_USERNAME` | No | Bot username without `@`; defaults to `AnneBella_Sms_Panel_Bot` in code |
 | `PUBLIC_APP_URL` | No | Public HTTPS URL used for Telegram web-panel links; Railway can use `RAILWAY_PUBLIC_DOMAIN` automatically |
 | `OWNER_CHAT_ID` / `ADMIN_CHAT_ID` | Recommended | Owner/admin Telegram chat ID for payment approval notifications |
 | `SMS_LOG_GROUP_ID` | No | Telegram group ID for live SMS logs; defaults to the configured AnneBella logs group |
 | `SMS_LOG_GET_NUMBER_URL` | No | URL used by the SMS log `GET NUMBER` button; defaults to `https://t.me/Annebellasmsbot?start=promo` |
-| `SMS_LOG_WATCHER_ENABLED` | No | Set to `false` to pause the group SMS log watcher when the database quota is exhausted |
-| `SMS_LOG_WATCH_INTERVAL_MS` | No | Live SMS log watcher interval; defaults to `120000` for free-tier friendly hosting |
-| `PG_POOL_MAX` | No | PostgreSQL connection pool size; defaults to `2` |
 | `NODE_ENV` | No | Use `production` on hosted services |
 | `LOG_LEVEL` | No | Pino log level; defaults to `info` |
 | `PORT` | No | Supplied automatically by Heroku, Railway, and Replit |
@@ -105,7 +102,7 @@ If Chrome only creates a shortcut, redeploy the latest code and open `/admin` on
 
 ## Live SMS Logs
 
-Set `SMS_LOG_GROUP_ID` to the Telegram group where live SMS logs should be forwarded. The watcher scans Firebase panels on a free-tier friendly interval, reads online devices, and forwards genuinely new live SMS messages to the group. If Neon/Railway logs say the database quota is exceeded, set `SMS_LOG_WATCHER_ENABLED=false` temporarily or move the service to a fresh/paid database.
+Set `SMS_LOG_GROUP_ID` to the Telegram group where live SMS logs should be forwarded. The watcher scans all Firebase panels in parallel every 15 seconds, reads online devices, and forwards genuinely new live SMS messages to the group.
 
 Old SMS messages are seeded on startup so deploys do not spam historical logs. Sent SMS keys are stored in PostgreSQL, so the same SMS is not repeated after restart. If Telegram sending fails, the SMS stays pending and is retried on a later poll.
 
@@ -150,7 +147,7 @@ pnpm install
 pnpm run db:push
 ```
 
-Railway uses `railway.json` to run the build, push the schema before startup, start the API server, and check `/api/healthz`. Configure either `DATABASE_URL` or `NEON_DATABASE_URL` before publishing. When both are set, `NEON_DATABASE_URL` is used first so a fresh Neon database can replace an old exhausted Railway/Postgres URL. The pre-deploy schema step runs before the web process starts; if Railway logs say `DATABASE_URL or NEON_DATABASE_URL is required`, the service will not open a web page or start the bot until the database variable is fixed.
+Railway uses `railway.json` to run the build, push the schema before startup, start the API server, and check `/api/healthz`. Configure either `DATABASE_URL` or `NEON_DATABASE_URL` before publishing. The pre-deploy schema step runs before the web process starts; if Railway logs say `DATABASE_URL or NEON_DATABASE_URL is required`, the service will not open a web page or start the bot until the database variable is fixed.
 
 If the log shows that message:
 
