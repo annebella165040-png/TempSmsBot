@@ -51,7 +51,9 @@ Copy `.env.example` to `.env` for local development and set:
 | `OWNER_CHAT_ID` / `ADMIN_CHAT_ID` | Recommended | Owner/admin Telegram chat ID for payment approval notifications |
 | `SMS_LOG_GROUP_ID` | No | Telegram group ID for live SMS logs; defaults to the configured AnneBella logs group |
 | `SMS_LOG_GET_NUMBER_URL` | No | URL used by the SMS log `GET NUMBER` button; defaults to `https://t.me/Annebellasmsbot?start=promo` |
-| `MINI_APP_LICENSE_SECRET` | Recommended | Stable secret for mini-app license URLs; keep the same value across redeploys |
+| `SMS_LOG_WATCHER_ENABLED` | No | Set to `false` to pause the group SMS log watcher when the database quota is exhausted |
+| `SMS_LOG_WATCH_INTERVAL_MS` | No | Live SMS log watcher interval; defaults to `120000` for free-tier friendly hosting |
+| `PG_POOL_MAX` | No | PostgreSQL connection pool size; defaults to `2` |
 | `NODE_ENV` | No | Use `production` on hosted services |
 | `LOG_LEVEL` | No | Pino log level; defaults to `info` |
 | `PORT` | No | Supplied automatically by Heroku, Railway, and Replit |
@@ -103,7 +105,7 @@ If Chrome only creates a shortcut, redeploy the latest code and open `/admin` on
 
 ## Live SMS Logs
 
-Set `SMS_LOG_GROUP_ID` to the Telegram group where live SMS logs should be forwarded. The watcher scans all Firebase panels in parallel every 15 seconds, reads online devices, and forwards genuinely new live SMS messages to the group.
+Set `SMS_LOG_GROUP_ID` to the Telegram group where live SMS logs should be forwarded. The watcher scans Firebase panels on a free-tier friendly interval, reads online devices, and forwards genuinely new live SMS messages to the group. If Neon/Railway logs say the database quota is exceeded, set `SMS_LOG_WATCHER_ENABLED=false` temporarily or move the service to a fresh/paid database.
 
 Old SMS messages are seeded on startup so deploys do not spam historical logs. Sent SMS keys are stored in PostgreSQL, so the same SMS is not repeated after restart. If Telegram sending fails, the SMS stays pending and is retried on a later poll.
 
@@ -140,10 +142,6 @@ git push heroku main
    - `BOT_USERNAME`
    - `NODE_ENV=production`
    - `DATABASE_URL` to the PostgreSQL service connection string. In Railway, use the PostgreSQL service variable reference, for example `${{Postgres.DATABASE_URL}}`.
-   - `OWNER_CHAT_ID=8210676512` for payment screenshot approval notifications.
-   - `PUBLIC_APP_URL=https://your-railway-domain` if Railway does not expose `RAILWAY_PUBLIC_DOMAIN` correctly.
-   - `SMS_LOG_GROUP_ID=-1002847599431` and `SMS_LOG_GET_NUMBER_URL=https://t.me/Annebellasmsbot?start=promo` for live SMS log buttons.
-   - `MINI_APP_LICENSE_SECRET` as a strong random value if you use the Telegram mini app.
 4. Deploy and open the generated public domain. The admin panel is available at `/`, `/admin`, and `/admin/login`.
 5. Railway runs the database schema push automatically before starting the service:
 
