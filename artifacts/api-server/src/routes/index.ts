@@ -10,10 +10,24 @@ import broadcastRouter from "./broadcast";
 import channelsRouter from "./channels";
 import tasksRouter from "./tasks";
 import settingsRouter from "./settings";
+import { ensureCoreDatabaseSchema } from "../lib/schemaBootstrap";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+
+router.use(async (_req, res, next): Promise<void> => {
+  try {
+    await ensureCoreDatabaseSchema();
+    next();
+  } catch (err) {
+    res.status(503).json({
+      error: "Database schema is not ready",
+      details: err instanceof Error ? err.message : String(err),
+    });
+  }
+});
+
 router.use(adminRouter);
 router.use(panelsRouter);
 router.use(dashboardRouter);
