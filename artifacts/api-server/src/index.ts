@@ -1,4 +1,5 @@
 import app from "./app";
+import { databaseSource, databaseTarget } from "@workspace/db";
 import { initBot } from "./lib/bot";
 import { logger } from "./lib/logger";
 import { ensureCoreDatabaseSchema } from "./lib/schemaBootstrap";
@@ -27,6 +28,7 @@ app.listen(port, host, async (err) => {
   }
 
   logger.info({ host, port }, "Server listening");
+  logger.info({ databaseSource, databaseTarget }, "Database target selected");
 
   try {
     await ensureCoreDatabaseSchema();
