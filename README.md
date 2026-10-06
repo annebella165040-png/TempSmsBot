@@ -44,8 +44,8 @@ Copy `.env.example` to `.env` for local development and set:
 | --- | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Yes | Private token created by BotFather |
 | `ADMIN_PASSWORD` | Yes | Password for `/admin/login` |
-| `DATABASE_URL` | Yes on Railway | PostgreSQL connection string |
-| `NEON_DATABASE_URL` | Optional | Replit demo fallback for a Neon PostgreSQL connection |
+| `DATABASE_URL` | Yes when `NEON_DATABASE_URL` is blank | PostgreSQL connection string |
+| `NEON_DATABASE_URL` | Recommended for Neon | Preferred Neon PostgreSQL connection string; overrides `DATABASE_URL` when set |
 | `BOT_USERNAME` | No | Bot username without `@`; defaults to `AnneBella_Sms_Panel_Bot` in code |
 | `PUBLIC_APP_URL` | No | Public HTTPS URL used for Telegram web-panel links; Railway can use `RAILWAY_PUBLIC_DOMAIN` automatically |
 | `OWNER_CHAT_ID` / `ADMIN_CHAT_ID` | Recommended | Owner/admin Telegram chat ID for payment approval notifications |
@@ -150,7 +150,7 @@ pnpm install
 pnpm run db:push
 ```
 
-Railway uses `railway.json` to run the build, push the schema before startup, start the API server, and check `/api/healthz`. Configure either `DATABASE_URL` or `NEON_DATABASE_URL` before publishing. The pre-deploy schema step runs before the web process starts; if Railway logs say `DATABASE_URL or NEON_DATABASE_URL is required`, the service will not open a web page or start the bot until the database variable is fixed.
+Railway uses `railway.json` to run the build, push the schema before startup, start the API server, and check `/api/healthz`. Configure either `DATABASE_URL` or `NEON_DATABASE_URL` before publishing. When both are set, `NEON_DATABASE_URL` is used first so a fresh Neon database can replace an old exhausted Railway/Postgres URL. The pre-deploy schema step runs before the web process starts; if Railway logs say `DATABASE_URL or NEON_DATABASE_URL is required`, the service will not open a web page or start the bot until the database variable is fixed.
 
 If the log shows that message:
 
