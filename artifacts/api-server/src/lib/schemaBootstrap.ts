@@ -1,9 +1,44 @@
 import { databaseConfigured, pool } from "@workspace/db";
 
 let ready = false;
+const requiredTables = [
+  "firebase_panels",
+  "bot_users",
+  "gift_cards",
+  "referrals",
+  "sms_log_entries",
+  "app_settings",
+  "app_tasks",
+];
 
 async function query(sql: string): Promise<void> {
   await pool.query(sql);
+}
+
+export async function getCoreDatabaseSchemaStatus(): Promise<{
+  configured: boolean;
+  ready: boolean;
+  tables: string[];
+  missing: string[];
+}> {
+  if (!databaseConfigured) {
+    return { configured: false, ready: false, tables: [], missing: requiredTables };
+  }
+
+  const result = await pool.query<{ table_name: string }>(
+    `
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = current_schema()
+        AND table_name = ANY($1)
+      ORDER BY table_name
+    `,
+    [requiredTables],
+  );
+  const tables = result.rows.map((row) => row.table_name);
+  const existing = new Set(tables);
+  const missing = requiredTables.filter((table) => !existing.has(table));
+  return { configured: true, ready: missing.length === 0, tables, missing };
 }
 
 export async function ensureCoreDatabaseSchema(): Promise<void> {
@@ -115,6 +150,11 @@ export async function ensureCoreDatabaseSchema(): Promise<void> {
   await query("CREATE UNIQUE INDEX IF NOT EXISTS bot_users_referral_code_unique_idx ON bot_users (referral_code)");
   await query("CREATE UNIQUE INDEX IF NOT EXISTS gift_cards_code_unique_idx ON gift_cards (code)");
   await query("CREATE UNIQUE INDEX IF NOT EXISTS sms_log_entries_sms_key_unique_idx ON sms_log_entries (sms_key)");
+
+  const status = await getCoreDatabaseSchemaStatus();
+  if (!status.ready) {
+    throw new Error(`Database schema bootstrap incomplete. Missing tables: ${status.missing.join(", ")}`);
+  }
 
   ready = true;
 }
