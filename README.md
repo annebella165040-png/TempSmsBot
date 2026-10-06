@@ -151,6 +151,8 @@ Railway uses `railway.json` to run the build, push the schema before startup, st
 
 Use `/api/db-status` after deploy to verify database readiness. It returns the required table list and any missing tables, which helps confirm whether the web panel and bot are connected to the expected PostgreSQL database.
 
+The Railway start command runs `pnpm --filter @workspace/db run setup` before the API server starts. This setup command creates the required PostgreSQL tables and indexes directly, then verifies that `firebase_panels`, `bot_users`, `gift_cards`, `referrals`, `sms_log_entries`, `app_settings`, and `app_tasks` exist.
+
 If the log shows that message:
 
 1. Add a PostgreSQL service to the same Railway project.
