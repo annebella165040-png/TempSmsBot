@@ -149,6 +149,8 @@ pnpm run db:push
 
 Railway uses `railway.json` to run the build, push the schema before startup, start the API server, and check `/api/healthz`. Configure either `DATABASE_URL` or `NEON_DATABASE_URL` before publishing. The pre-deploy schema step runs before the web process starts; if Railway logs say `DATABASE_URL or NEON_DATABASE_URL is required`, the service will not open a web page or start the bot until the database variable is fixed.
 
+Use `/api/db-status` after deploy to verify database readiness. It returns the required table list and any missing tables, which helps confirm whether the web panel and bot are connected to the expected PostgreSQL database.
+
 If the log shows that message:
 
 1. Add a PostgreSQL service to the same Railway project.
