@@ -6,12 +6,13 @@ import { logger } from "./logger";
 
 const SMS_LOG_GROUP_ID = process.env.SMS_LOG_GROUP_ID || "-1002847599431";
 const SMS_LOG_GET_NUMBER_URL = process.env.SMS_LOG_GET_NUMBER_URL || "https://t.me/Annebellasmsbot?start=promo";
-const WATCH_INTERVAL_MS = positiveIntegerEnv("SMS_LOG_WATCH_INTERVAL_MS", 45000);
-const PANEL_CONCURRENCY = positiveIntegerEnv("SMS_LOG_PANEL_CONCURRENCY", 3);
-const DEVICE_CONCURRENCY = positiveIntegerEnv("SMS_LOG_DEVICE_CONCURRENCY", 8);
-const SEND_CONCURRENCY = 4;
+const WATCH_INTERVAL_MS = positiveIntegerEnv("SMS_LOG_WATCH_INTERVAL_MS", 120000);
+const PANEL_CONCURRENCY = positiveIntegerEnv("SMS_LOG_PANEL_CONCURRENCY", 1);
+const DEVICE_CONCURRENCY = positiveIntegerEnv("SMS_LOG_DEVICE_CONCURRENCY", 4);
+const SEND_CONCURRENCY = positiveIntegerEnv("SMS_LOG_SEND_CONCURRENCY", 2);
+const QUOTA_BACKOFF_MS = positiveIntegerEnv("SMS_LOG_QUOTA_BACKOFF_MS", 300000);
 const MAX_MESSAGES_PER_DEVICE = 4;
-const MAX_PENDING_PER_POLL = 80;
+const MAX_PENDING_PER_POLL = positiveIntegerEnv("SMS_LOG_MAX_PENDING_PER_POLL", 40);
 const EMPTY_PANEL_COOLDOWN_MS = positiveIntegerEnv("SMS_LOG_EMPTY_PANEL_COOLDOWN_MS", 180000);
 const inFlightSms = new Set<string>();
 const nextPanelScanAt = new Map<number, number>();
@@ -19,6 +20,7 @@ let interval: NodeJS.Timeout | null = null;
 let running = false;
 let initialized = false;
 let storageReady = false;
+let nextPollAt = 0;
 
 type Panel = typeof panelsTable.$inferSelect;
 type PendingSmsLog = {
@@ -134,6 +136,11 @@ async function mapWithConcurrency<T, R>(
 function isKnownSmsLogStorageError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return message.includes("invalid input syntax for type interval") || message.includes("sms_log_entries");
+}
+
+function isDatabaseQuotaError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.toLowerCase().includes("exceeded the quota") || message.toLowerCase().includes("upgrade your plan");
 }
 
 function smsLogKeyboard() {
@@ -441,6 +448,7 @@ async function sendPendingSmsLogs(entries: PendingSmsLog[]): Promise<void> {
 
 async function pollSmsLogs(): Promise<void> {
   if (running) return;
+  if (Date.now() < nextPollAt) return;
   const bot = getBot();
   if (!bot) return;
 
@@ -456,6 +464,11 @@ async function pollSmsLogs(): Promise<void> {
     void trimSmsLogStorage().catch((err) => logger.warn({ err }, "Failed to trim SMS log dedupe table"));
     initialized = true;
   } catch (err) {
+    if (isDatabaseQuotaError(err)) {
+      nextPollAt = Date.now() + QUOTA_BACKOFF_MS;
+      logger.warn({ err, backoffMs: QUOTA_BACKOFF_MS }, "SMS log watcher paused after database quota error");
+      return;
+    }
     logger.error({ err }, "SMS log watcher poll failed");
   } finally {
     running = false;
@@ -464,6 +477,10 @@ async function pollSmsLogs(): Promise<void> {
 
 export function startSmsLogWatcher(): void {
   if (interval) return;
+  if (process.env.SMS_LOG_WATCHER_ENABLED === "false") {
+    logger.warn("SMS log watcher disabled by SMS_LOG_WATCHER_ENABLED=false");
+    return;
+  }
   void pollSmsLogs();
   interval = setInterval(() => void pollSmsLogs(), WATCH_INTERVAL_MS);
   logger.info({ groupId: SMS_LOG_GROUP_ID, intervalMs: WATCH_INTERVAL_MS }, "SMS log watcher started");
