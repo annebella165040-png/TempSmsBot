@@ -23,6 +23,7 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const BOT_USERNAME  = process.env.BOT_USERNAME  || "AnneBella_Sms_Panel_Bot";
 const DEVELOPER     = "@annebella";
 const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID || process.env.ADMIN_CHAT_ID || "8210676512";
+const TELEGRAM_MESSAGE_EFFECT_ID = process.env.TELEGRAM_MESSAGE_EFFECT_ID || "";
 const FREE_START_CREDITS = 100;
 const NUMBER_PURCHASE_CREDITS = 5;
 const REFERRAL_REWARD_CREDITS = 20;
@@ -446,6 +447,20 @@ function divider(): string {
   return "〰️〰️〰️〰️〰️〰️〰️〰️〰️〰️";
 }
 
+function tableBlock(headers: string[], rows: Array<Array<string | number>>): string {
+  const safeRows = rows.map((row) => row.map((cell, index) => {
+    const value = escapeTelegramHtml(String(cell));
+    return index === 0 ? sct(value) : value;
+  }));
+  const safeHeaders = headers.map((header) => sct(header));
+  const widths = safeHeaders.map((header, index) =>
+    Math.max(header.length, ...safeRows.map((row) => row[index]?.length ?? 0)),
+  );
+  const line = (cells: string[]) => cells.map((cell, index) => cell.padEnd(widths[index], " ")).join("  ");
+  const rule = widths.map((width) => "─".repeat(width)).join("  ");
+  return `<pre>${line(safeHeaders)}\n${rule}\n${safeRows.map(line).join("\n")}</pre>`;
+}
+
 function generateReferralCode(telegramId: string): string {
  return `ref_${telegramId}`;
 }
@@ -551,7 +566,19 @@ function withoutParseMode(payload: Record<string, any>): Record<string, any> {
   const p = stripKeyboardIcons(payload);
   p.text = stripHtmlToText(p.text || "");
   delete p.parse_mode;
+  delete p.message_effect_id;
   return p;
+}
+
+function withMessageEffect(payload: Record<string, any>): Record<string, any> {
+  if (!TELEGRAM_MESSAGE_EFFECT_ID || payload.message_effect_id) return payload;
+  return { ...payload, message_effect_id: TELEGRAM_MESSAGE_EFFECT_ID };
+}
+
+function withoutMessageEffect(payload: Record<string, any>): Record<string, any> {
+  const clone = { ...payload };
+  delete clone.message_effect_id;
+  return clone;
 }
 
 // â”€â”€â”€ Inline button with premium emoji via icon_custom_emoji_id (Adsbot style) â”€
@@ -851,6 +878,26 @@ function paymentMethodMessage(pending: PendingCreditPayment, settings: PaymentSe
   );
 }
 
+function generatedNumberMessage(device: Awaited<ReturnType<typeof getAllActiveDevices>>[number], displayPhone: string, creditsAfterPurchase: number): string {
+  return (
+    `${divider()}\n` +
+    `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
+    `${divider()}\n\n` +
+    tableBlock(["DETAIL", "VALUE"], [
+      ["DEVICE ID", `N${device.id}`],
+      ["NUMBER", displayPhone],
+      ["DEVICE NAME", device.name || device.model || device.id],
+      ["DATABASE", device.panelName],
+      ["STATUS", "ONLINE"],
+      ["BATTERY", device.battery || "—"],
+    ]) +
+    `\n\n${divider()}\n\n` +
+    `${em(E.credits, "")} CREDITS REMAINING: <b>${creditsAfterPurchase}</b>\n` +
+    `${em(E.refresh, "")} CANCEL BEFORE LIVE SMS = ${NUMBER_PURCHASE_CREDITS} CREDITS REFUND\n` +
+    `${em(E.history, "")} NUMBERS HISTORY MEIN SAVED — ANYTIME DEKHO.`
+  );
+}
+
 function numberState(liveSmsReceived = false): string {
   return JSON.stringify({ numberCreditCharged: true, liveSmsReceived } satisfies NumberCreditState);
 }
@@ -879,15 +926,16 @@ function setupHandlers(bot: TelegramBot) {
   // icon_custom_emoji_id on InlineKeyboardButton is preserved
   // (node-telegram-bot-api strips unknown fields during serialisation).
   const send = async (cid: number, html: string, opts: Record<string, any> = {}) => {
+    await bot.sendChatAction(cid, "typing").catch(() => {});
     const rm = opts.reply_markup;
     const hasInline = rm && typeof rm === "object" && "inline_keyboard" in rm;
     if (hasInline) {
-      const payload: Record<string, any> = {
+      const payload: Record<string, any> = withMessageEffect({
         chat_id:      cid,
         text:         sc(html),
         parse_mode:   "HTML",
         reply_markup: rm,
-      };
+      });
       // carry through any extra opts (disable_web_page_preview etc.)
       for (const [k, v] of Object.entries(opts)) {
         if (k !== "reply_markup" && k !== "parse_mode") payload[k] = v;
@@ -895,7 +943,11 @@ function setupHandlers(bot: TelegramBot) {
       const result = await rawTelegramRequest("sendMessage", payload);
       // If Telegram rejects (e.g. icon not supported), retry without icons
       if (!result.ok) {
-        const noIcons = await rawTelegramRequest("sendMessage", stripKeyboardIcons(payload));
+        const noEffect = payload.message_effect_id
+          ? await rawTelegramRequest("sendMessage", withoutMessageEffect(payload))
+          : result;
+        if (noEffect.ok) return noEffect;
+        const noIcons = await rawTelegramRequest("sendMessage", stripKeyboardIcons(withoutMessageEffect(payload)));
         if (!noIcons.ok) {
           return rawTelegramRequest("sendMessage", withoutParseMode(payload));
         }
@@ -904,20 +956,37 @@ function setupHandlers(bot: TelegramBot) {
       return result;
     }
     try {
-      return await bot.sendMessage(cid, sc(html), { parse_mode: "HTML", ...opts });
+      return await bot.sendMessage(cid, sc(html), withMessageEffect({ parse_mode: "HTML", ...opts }));
     } catch (err) {
+      if (TELEGRAM_MESSAGE_EFFECT_ID && !opts.message_effect_id) {
+        try {
+          return await bot.sendMessage(cid, sc(html), { parse_mode: "HTML", ...opts });
+        } catch {
+          // Fall through to plain-text compatibility fallback.
+        }
+      }
       logger.warn({ err }, "HTML message failed, retrying as plain text");
       const plainOpts: Record<string, any> = { ...opts };
       delete plainOpts.parse_mode;
+      delete plainOpts.message_effect_id;
       return bot.sendMessage(cid, stripHtmlToText(sc(html)), plainOpts);
     }
   };
 
   const sendPhoto = async (cid: number | string, photo: string, opts: Record<string, any> = {}) => {
     try {
+      await bot.sendChatAction(cid, "upload_photo").catch(() => {});
       const htmlOpts = opts.caption && opts.parse_mode === "HTML" ? { ...opts, caption: sc(opts.caption) } : opts;
-      return await bot.sendPhoto(cid, photo, htmlOpts);
+      return await bot.sendPhoto(cid, photo, withMessageEffect(htmlOpts));
     } catch (err) {
+      if (TELEGRAM_MESSAGE_EFFECT_ID && !opts.message_effect_id) {
+        try {
+          const htmlOpts = opts.caption && opts.parse_mode === "HTML" ? { ...opts, caption: sc(opts.caption) } : opts;
+          return await bot.sendPhoto(cid, photo, htmlOpts);
+        } catch {
+          // Fall through to plain caption fallback.
+        }
+      }
       if (!opts.caption || opts.parse_mode !== "HTML") throw err;
       logger.warn({ err }, "HTML photo caption failed, retrying as plain text");
       const plainOpts: Record<string, any> = { ...opts, caption: stripHtmlToText(sc(opts.caption)) };
@@ -1141,18 +1210,7 @@ function setupHandlers(bot: TelegramBot) {
 
         await send(
           chatId,
- `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
-          `${divider()}\n\n` +
-          `${em(E.id, "")} <b>DEVICE ID</b>    : N${device.id}\n` +
-          `${em(E.phone, "")} <b>NUMBER</b>      : ${displayPhone}\n` +
-          `${em(E.profile, "")} <b>DEVICE NAME</b> : ${device.name || device.model || device.id}\n` +
-          `${em(E.db, "")} <b>DATABASE</b>    : ${device.panelName}\n` +
-          `${em(E.check, "")} <b>STATUS</b>      : ${em(E.online, "")} ONLINE\n` +
-          `${em(E.battery, "")} <b>BATTERY</b>     : ${device.battery || "—"}\n` +
-          `${divider()}\n\n` +
-          `${em(E.credits, "")} CREDITS REMAINING: <b>${creditsAfterPurchase}</b>\n` +
-          `${em(E.refresh, "")} CANCEL BEFORE LIVE SMS = ${NUMBER_PURCHASE_CREDITS} CREDITS REFUND\n` +
-          `${em(E.history, "")} NUMBERS HISTORY MEIN SAVED — ANYTIME DEKHO.`,
+          generatedNumberMessage(device, displayPhone, creditsAfterPurchase),
           { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
         );
         return;
@@ -1222,18 +1280,7 @@ function setupHandlers(bot: TelegramBot) {
 
         await send(
           chatId,
- `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
-          `${divider()}\n\n` +
-          `${em(E.id, "")} <b>DEVICE ID</b>    : N${device2.id}\n` +
-          `${em(E.phone, "")} <b>NUMBER</b>      : ${displayPhone2}\n` +
-          `${em(E.profile, "")} <b>DEVICE NAME</b> : ${device2.name || device2.model || device2.id}\n` +
-          `${em(E.db, "")} <b>DATABASE</b>    : ${device2.panelName}\n` +
-          `${em(E.check, "")} <b>STATUS</b>      : ${em(E.online, "")} ONLINE\n` +
-          `${em(E.battery, "")} <b>BATTERY</b>     : ${device2.battery || "—"}\n` +
-          `${divider()}\n\n` +
-          `${em(E.credits, "")} CREDITS REMAINING: <b>${creditsAfterPurchase2}</b>\n` +
-          `${em(E.refresh, "")} CANCEL BEFORE LIVE SMS = ${NUMBER_PURCHASE_CREDITS} CREDITS REFUND\n` +
-          `${em(E.history, "")} NUMBERS HISTORY MEIN SAVED — ANYTIME DEKHO.`,
+          generatedNumberMessage(device2, displayPhone2, creditsAfterPurchase2),
           { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
         );
         return;
@@ -1443,11 +1490,14 @@ function setupHandlers(bot: TelegramBot) {
           chatId,
  `${em(E.check, "")} <b>STATUS REPORT</b>\n` +
           `${divider()}\n\n` +
-          `${em(E.panel, "")} <b>CONNECTED PANELS</b> : ${panels.length}\n` +
-          `${em(E.total, "")} <b>TOTAL DEVICES</b>    : ${totalDevices}\n` +
-          `${em(E.online, "")} <b>ONLINE DEVICES</b>   : ${totalOnline}\n` +
-          `${em(E.offline, "")} <b>OFFLINE DEVICES</b>  : ${totalOffline}\n` +
-          `${em(E.status_ok, "")} <b>ACTIVE RATE</b>      : ${activeRate}%\n\n` +
+          tableBlock(["METRIC", "VALUE"], [
+            ["CONNECTED PANELS", panels.length],
+            ["TOTAL DEVICES", totalDevices],
+            ["ONLINE DEVICES", totalOnline],
+            ["OFFLINE DEVICES", totalOffline],
+            ["ACTIVE RATE", `${activeRate}%`],
+          ]) +
+          `\n\n` +
           `${divider()}\n` +
           `${em(E.refresh, "")} <b>LIVE INVENTORY</b>\n` +
           `Numbers are refreshed directly from all connected Firebase panels.\n` +
@@ -1645,10 +1695,13 @@ function setupHandlers(bot: TelegramBot) {
           `${divider()}\n\n` +
           `${em(E.credits, "")} <b>SELECT A CREDIT PACKAGE</b>\n` +
           `Package select karne ke baad payment method choose karo: UPI ya USDT.\n\n` +
-          `${em(E.money, "")} 100 CREDITS — ₹49\n` +
-          `${em(E.money, "")} 500 CREDITS — ₹199\n` +
-          `${em(E.money, "")} 1000 CREDITS — ₹349\n` +
-          `${em(E.money, "")} 5000 CREDITS — ₹999\n\n` +
+          tableBlock(["CREDITS", "PRICE"], [
+            ["100", "₹49"],
+            ["500", "₹199"],
+            ["1000", "₹349"],
+            ["5000", "₹999"],
+          ]) +
+          `\n\n` +
           `${em(E.history, "")} Payment complete karke screenshot yahi bot mein bhejo for approval.`,
           {
             parse_mode: "HTML",
