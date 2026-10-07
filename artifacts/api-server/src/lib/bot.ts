@@ -23,7 +23,7 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const BOT_USERNAME  = process.env.BOT_USERNAME  || "AnneBella_Sms_Panel_Bot";
 const DEVELOPER     = "@annebella";
 const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID || process.env.ADMIN_CHAT_ID || "8210676512";
-const TELEGRAM_MESSAGE_EFFECT_ID = process.env.TELEGRAM_MESSAGE_EFFECT_ID || "";
+const TELEGRAM_MESSAGE_EFFECT_ID = process.env.TELEGRAM_MESSAGE_EFFECT_ID || "5104841245755180586";
 const FREE_START_CREDITS = 100;
 const NUMBER_PURCHASE_CREDITS = 5;
 const REFERRAL_REWARD_CREDITS = 20;
@@ -461,11 +461,21 @@ function tableBlock(headers: string[], rows: Array<Array<string | number>>): str
   return `<pre>${line(safeHeaders)}\n${rule}\n${safeRows.map(line).join("\n")}</pre>`;
 }
 
-function richTableBlock(headers: string[], rows: Array<Array<string | number>>): string {
+function compactValue(value: string | number, max = 18): string {
+  const text = String(value);
+  if (text.length <= max) return text;
+  const left = Math.max(6, Math.floor((max - 2) / 2));
+  const right = Math.max(4, max - left - 2);
+  return `${text.slice(0, left)}..${text.slice(-right)}`;
+}
+
+function richTableBlock(headers: string[], rows: Array<Array<string | number>>, emojiIds: string[] = []): string {
   const safeHeaders = headers.map((header) => sct(escapeTelegramHtml(header)).replace(/\|/g, "\\|"));
-  const safeRows = rows.map((row) => row.map((cell, index) => {
+  const safeRows = rows.map((row, rowIndex) => row.map((cell, index) => {
     const value = escapeTelegramHtml(String(cell)).replace(/\|/g, "\\|");
-    return index === 0 ? sct(value) : value;
+    if (index !== 0) return value;
+    const emoji = emojiIds[rowIndex] ? `${em(emojiIds[rowIndex], "")} ` : "";
+    return `${emoji}${sct(value)}`;
   }));
   return [
     `| ${safeHeaders.join(" | ")} |`,
@@ -896,13 +906,13 @@ function generatedNumberMessage(device: Awaited<ReturnType<typeof getAllActiveDe
     `${divider()}\n` +
     `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
     `${divider()}\n\n` +
-    tableBlock(["DETAIL", "VALUE"], [
-      ["DEVICE ID", `N${device.id}`],
+    tableBlock(["INFO", "VALUE"], [
+      ["ID", compactValue(`N${device.id}`, 18)],
       ["NUMBER", displayPhone],
-      ["DEVICE NAME", device.name || device.model || device.id],
-      ["DATABASE", device.panelName],
+      ["NAME", compactValue(device.name || device.model || device.id, 18)],
+      ["PANEL", compactValue(device.panelName, 18)],
       ["STATUS", "ONLINE"],
-      ["BATTERY", device.battery || "—"],
+      ["BATT", device.battery || "—"],
     ]) +
     `\n\n${divider()}\n\n` +
     `${em(E.credits, "")} CREDITS REMAINING: <b>${creditsAfterPurchase}</b>\n` +
@@ -916,14 +926,14 @@ function generatedNumberRichMessage(device: Awaited<ReturnType<typeof getAllActi
     `${divider()}\n` +
     `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
     `${divider()}\n\n` +
-    richTableBlock(["DETAIL", "VALUE"], [
-      ["DEVICE ID", `N${device.id}`],
+    richTableBlock(["INFO", "VALUE"], [
+      ["ID", compactValue(`N${device.id}`, 18)],
       ["NUMBER", displayPhone],
-      ["DEVICE NAME", device.name || device.model || device.id],
-      ["DATABASE", device.panelName],
+      ["NAME", compactValue(device.name || device.model || device.id, 18)],
+      ["PANEL", compactValue(device.panelName, 18)],
       ["STATUS", "ONLINE"],
-      ["BATTERY", device.battery || "—"],
-    ]) +
+      ["BATT", device.battery || "—"],
+    ], [E.id, E.phone, E.device, E.panel, E.online, E.battery]) +
     `\n\n${divider()}\n\n` +
     `${em(E.credits, "")} CREDITS REMAINING: <b>${creditsAfterPurchase}</b>\n` +
     `${em(E.refresh, "")} CANCEL BEFORE LIVE SMS = ${NUMBER_PURCHASE_CREDITS} CREDITS REFUND\n` +
@@ -1547,18 +1557,18 @@ function setupHandlers(bot: TelegramBot) {
         }
         const activeRate = totalDevices > 0 ? Math.round((totalOnline / totalDevices) * 100) : 0;
         const statusRows: Array<Array<string | number>> = [
-          ["CONNECTED PANELS", panels.length],
-          ["TOTAL DEVICES", totalDevices],
-          ["ONLINE DEVICES", totalOnline],
-          ["OFFLINE DEVICES", totalOffline],
-          ["ACTIVE RATE", `${activeRate}%`],
+          ["PANELS", panels.length],
+          ["TOTAL", totalDevices],
+          ["ONLINE", totalOnline],
+          ["OFFLINE", totalOffline],
+          ["RATE", `${activeRate}%`],
         ];
 
         await send(
           chatId,
  `${em(E.check, "")} <b>STATUS REPORT</b>\n` +
           `${divider()}\n\n` +
-          tableBlock(["METRIC", "VALUE"], statusRows) +
+          tableBlock(["INFO", "VALUE"], statusRows) +
           `\n\n` +
           `${divider()}\n` +
           `${em(E.refresh, "")} <b>LIVE INVENTORY</b>\n` +
@@ -1570,7 +1580,7 @@ function setupHandlers(bot: TelegramBot) {
             rich_markdown:
               `${em(E.check, "")} <b>STATUS REPORT</b>\n` +
               `${divider()}\n\n` +
-              richTableBlock(["METRIC", "VALUE"], statusRows) +
+              richTableBlock(["INFO", "VALUE"], statusRows, [E.panel, E.total, E.online, E.offline, E.status_ok]) +
               `\n\n${divider()}\n` +
               `${em(E.refresh, "")} <b>LIVE INVENTORY</b>\n` +
               `Numbers are refreshed directly from all connected Firebase panels.\n` +
@@ -1774,7 +1784,7 @@ function setupHandlers(bot: TelegramBot) {
           `${divider()}\n\n` +
           `${em(E.credits, "")} <b>SELECT A CREDIT PACKAGE</b>\n` +
           `Package select karne ke baad payment method choose karo: UPI ya USDT.\n\n` +
-          tableBlock(["CREDITS", "PRICE"], creditPackageRows) +
+          tableBlock(["CR", "PRICE"], creditPackageRows) +
           `\n\n` +
           `${em(E.history, "")} Payment complete karke screenshot yahi bot mein bhejo for approval.`,
           {
@@ -1784,7 +1794,7 @@ function setupHandlers(bot: TelegramBot) {
               `${divider()}\n\n` +
               `${em(E.credits, "")} <b>SELECT A CREDIT PACKAGE</b>\n` +
               `Package select karne ke baad payment method choose karo: UPI ya USDT.\n\n` +
-              richTableBlock(["CREDITS", "PRICE"], creditPackageRows) +
+              richTableBlock(["CR", "PRICE"], creditPackageRows, [E.credits, E.credits, E.crown, E.fire]) +
               `\n\n${em(E.history, "")} Payment complete karke screenshot yahi bot mein bhejo for approval.`,
             reply_markup: {
               inline_keyboard: [
