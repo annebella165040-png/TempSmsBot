@@ -650,6 +650,10 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
               <button class="btn btn-success" id="sms-log-on" onclick="setSmsLogEnabled(true)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>On</button>
               <button class="btn btn-danger" id="sms-log-off" onclick="setSmsLogEnabled(false)"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Off</button>
             </div>
+            <div class="form-grid c2" style="margin-top:12px">
+              <div class="form-group"><label>SMS Log Chat ID</label><input id="sms-log-chat-id" placeholder="-1002847599431 or @logchannel"/></div>
+              <div class="form-group"><label>Save Destination</label><button class="btn btn-primary btn-full" onclick="saveSmsLogChatId()"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>Save Log Chat</button></div>
+            </div>
           </div>
         </div>
         <div class="card">
@@ -821,11 +825,12 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
       <!-- CHANNELS -->
       <div class="section" id="tab-channels">
         <div class="card">
-          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Force-Join Channel</span></div>
+          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Required Channel</span></div>
           <div class="card-body">
+            <div class="empty" style="margin-bottom:12px;text-align:left">Membership check uses channel @username or numeric -100 ID. Label, invite URL and emoji control the premium force-join button shown in bot.</div>
             <div class="form-grid c3">
-              <div class="form-group"><label>Channel @username</label><input id="ch-id" placeholder="@channelname"/></div>
-              <div class="form-group"><label>Display Label</label><input id="ch-label" placeholder="AnneBella Network"/></div>
+              <div class="form-group"><label>Channel ID / Username</label><input id="ch-id" placeholder="@channelname or -100..."/></div>
+              <div class="form-group"><label>Button Title</label><input id="ch-label" placeholder="AnneBella Network"/></div>
               <div class="form-group"><label>Invite URL</label><input id="ch-url" placeholder="https://t.me/channelname"/></div>
               <div class="form-group"><label>Premium Emoji ID</label><input id="ch-emoji" placeholder="5372849966689566579"/></div>
             </div>
@@ -836,8 +841,8 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Force-Join Channels</span><button class="btn btn-primary btn-sm" onclick="loadChannels()"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button></div>
-          <div class="card-body" style="padding:0"><div id="ch-list"><div class="empty">Loading…</div></div></div>
+          <div class="card-header"><span class="card-title"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Force-Join Channels</span><button class="btn btn-primary btn-sm" onclick="loadChannels()"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh</button></div>
+          <div class="card-body" style="padding:0"><div class="tbl-wrap"><table><thead><tr><th>Title</th><th>Chat ID</th><th>Invite URL</th><th>Emoji</th><th>Controls</th></tr></thead><tbody id="ch-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody></table></div></div>
         </div>
       </div>
 
@@ -890,9 +895,10 @@ function switchTab(tab){
 document.querySelectorAll('.nav-item,.bnav-item').forEach(n=>n.addEventListener('click',()=>switchTab(n.dataset.tab)));
 function esc(s){const d=document.createElement('div');d.textContent=String(s??'');return d.innerHTML;}
 function countUp(el,t,dur=800){const s=performance.now(),f=parseInt(el.textContent)||0;function step(n){const p=Math.min((n-s)/dur,1),e=1-Math.pow(1-p,3);el.textContent=Math.round(f+(t-f)*e);if(p<1)requestAnimationFrame(step);}requestAnimationFrame(step);}
-function renderSmsLogSetting(enabled){const st=document.getElementById('sms-log-status');if(!st)return;st.textContent=enabled?'Forwarding ON':'Forwarding OFF';st.className='badge '+(enabled?'b-active':'b-off');document.getElementById('sms-log-on').disabled=enabled;document.getElementById('sms-log-off').disabled=!enabled;}
-async function loadSmsLogSetting(){try{const d=await(await fetch(B+'/api/settings/sms-log',{cache:'no-store'})).json();renderSmsLogSetting(!!d.enabled);}catch{const st=document.getElementById('sms-log-status');if(st){st.textContent='Load failed';st.className='badge b-off';}}}
-async function setSmsLogEnabled(enabled){try{const r=await fetch(B+'/api/settings/sms-log',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});const d=await r.json();if(r.ok){renderSmsLogSetting(!!d.enabled);toast('SMS log forwarding '+(d.enabled?'enabled':'disabled'));}else toast(d.error||'SMS log update failed',false);}catch{toast('Network error',false);}}
+function renderSmsLogSetting(d){const enabled=!!d.enabled,st=document.getElementById('sms-log-status');if(!st)return;st.textContent=enabled?'Forwarding ON':'Forwarding OFF';st.className='badge '+(enabled?'b-active':'b-off');document.getElementById('sms-log-on').disabled=enabled;document.getElementById('sms-log-off').disabled=!enabled;const input=document.getElementById('sms-log-chat-id');if(input&&d.chatId)input.value=d.chatId;}
+async function loadSmsLogSetting(){try{const d=await(await fetch(B+'/api/settings/sms-log',{cache:'no-store'})).json();renderSmsLogSetting(d);}catch{const st=document.getElementById('sms-log-status');if(st){st.textContent='Load failed';st.className='badge b-off';}}}
+async function setSmsLogEnabled(enabled){try{const r=await fetch(B+'/api/settings/sms-log',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});const d=await r.json();if(r.ok){renderSmsLogSetting(d);toast('SMS log forwarding '+(d.enabled?'enabled':'disabled'));}else toast(d.error||'SMS log update failed',false);}catch{toast('Network error',false);}}
+async function saveSmsLogChatId(){const chatId=document.getElementById('sms-log-chat-id').value.trim();if(!chatId){toast('Log chat ID required',false);return;}try{const r=await fetch(B+'/api/settings/sms-log',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({chatId})});const d=await r.json();if(r.ok){renderSmsLogSetting(d);toast('Log chat saved: '+d.chatId);}else toast(d.error||'Log chat save failed',false);}catch{toast('Network error',false);}}
 
 async function loadDashboard(){
   try{
@@ -999,8 +1005,9 @@ let editingChannelId=null;
 function channelPayload(){return {id:document.getElementById('ch-id').value.trim(),label:document.getElementById('ch-label').value.trim(),url:document.getElementById('ch-url').value.trim(),emojiId:document.getElementById('ch-emoji').value.trim()||'5372849966689566579'};}
 function resetChannelForm(){editingChannelId=null;['ch-id','ch-label','ch-url','ch-emoji'].forEach(i=>document.getElementById(i).value='');document.getElementById('ch-save-btn').innerHTML='<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Channel';}
 function editChannel(id,label,url,emojiId){editingChannelId=id;document.getElementById('ch-id').value=id;document.getElementById('ch-label').value=label;document.getElementById('ch-url').value=url;document.getElementById('ch-emoji').value=emojiId||'5372849966689566579';document.getElementById('ch-save-btn').innerHTML='<svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>Save Channel';toast('Editing '+label);}
-async function loadChannels(){try{const chs=await(await fetch(B+'/api/channels')).json();window._channels=chs;const el=document.getElementById('ch-list');if(!chs.length){el.innerHTML='<div class="empty">No channels</div>';return;}el.innerHTML=chs.map((c,i)=>\`<div class="ch-item"><div class="ch-icon-box"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 5.5 5.5l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 15.35z"/></svg></div><div class="ch-info"><div class="ch-name">\${esc(c.label)}</div><div class="ch-id">\${esc(c.id)} · <a href="\${esc(c.url)}" target="_blank" style="color:var(--c)">\${esc(c.url)}</a><br><span style="color:var(--dim)">emoji: \${esc(c.emojiId||'default')}</span></div></div><button class="btn btn-primary btn-sm" onclick="editChannelFromIndex(\${i})">Edit</button><button class="btn btn-danger btn-sm" onclick="delChannel('\${esc(c.id)}',this)"><svg viewBox="0 0 24 24" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14"/></svg></button></div>\`).join('');}catch{toast('Load failed',false);}}
+async function loadChannels(){try{const chs=await(await fetch(B+'/api/channels')).json();window._channels=chs;const tb=document.getElementById('ch-tbody');if(!chs.length){tb.innerHTML='<tr><td colspan="5" class="empty">No force-join channels configured</td></tr>';return;}tb.innerHTML=chs.map((c,i)=>\`<tr><td><input id="ch-label-\${i}" value="\${esc(c.label)}" placeholder="Button title"/></td><td><input id="ch-id-\${i}" value="\${esc(c.id)}" placeholder="@channel or -100..."/></td><td><input id="ch-url-\${i}" value="\${esc(c.url)}" placeholder="https://t.me/..."/></td><td><input id="ch-emoji-\${i}" value="\${esc(c.emojiId||'')}" placeholder="emoji id"/></td><td><div class="user-actions" style="min-width:190px"><button class="btn btn-primary btn-sm" onclick="updateChannelFromRow(\${i})">Update</button><button class="btn btn-success btn-sm" onclick="editChannelFromIndex(\${i})">Load</button><button class="btn btn-danger btn-sm" onclick="delChannel('\${esc(c.id)}',this)">Delete</button></div></td></tr>\`).join('');}catch{toast('Load failed',false);}}
 function editChannelFromIndex(i){const c=(window._channels||[])[i];if(c)editChannel(c.id,c.label,c.url,c.emojiId);}
+async function updateChannelFromRow(i){const c=(window._channels||[])[i];if(!c)return;const body={id:document.getElementById('ch-id-'+i).value.trim(),label:document.getElementById('ch-label-'+i).value.trim(),url:document.getElementById('ch-url-'+i).value.trim(),emojiId:document.getElementById('ch-emoji-'+i).value.trim()||'5372849966689566579'};if(!body.id||!body.label||!body.url){toast('All fields required',false);return;}try{const r=await fetch(B+'/api/channels/'+encodeURIComponent(c.id),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(r.ok){toast('Channel updated');loadChannels();}else toast(d.error||'Update failed',false);}catch{toast('Error',false);}}
 async function saveChannel(){const body=channelPayload();if(!body.id||!body.label||!body.url){toast('All fields required',false);return;}const url=editingChannelId?B+'/api/channels/'+encodeURIComponent(editingChannelId):B+'/api/channels';const method=editingChannelId?'PATCH':'POST';try{const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){toast(editingChannelId?'Updated':'Added');resetChannelForm();loadChannels();}else{const e=await r.json();toast(e.error||'Error',false);}}catch{toast('Error',false);}}
 async function delChannel(id,btn){if(!confirm('Remove?'))return;btn.disabled=true;try{const r=await fetch(B+'/api/channels/'+encodeURIComponent(id),{method:'DELETE'});if(r.ok){toast('Removed');loadChannels();}else toast('Failed',false);}catch{toast('Error',false);}finally{btn.disabled=false;}}
 
