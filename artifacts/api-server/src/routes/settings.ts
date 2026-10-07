@@ -50,6 +50,27 @@ async function getPaymentSettings(): Promise<PaymentSettings> {
   return settings;
 }
 
+async function getBooleanSetting(key: string, fallback: boolean): Promise<boolean> {
+  await ensurePaymentSettingsStorage();
+  const result = await pool.query<{ value: string }>(
+    "SELECT value FROM app_settings WHERE key = $1",
+    [key],
+  );
+  if (!result.rows.length) return fallback;
+  return result.rows[0].value === "true";
+}
+
+async function setBooleanSetting(key: string, enabled: boolean): Promise<boolean> {
+  await ensurePaymentSettingsStorage();
+  await pool.query(
+    `INSERT INTO app_settings (key, value, updated_at)
+     VALUES ($1, $2, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [key, String(enabled)],
+  );
+  return enabled;
+}
+
 async function updatePaymentSettings(input: Partial<PaymentSettings>): Promise<PaymentSettings> {
   await ensurePaymentSettingsStorage();
   const allowed = Object.keys(DEFAULT_PAYMENT_SETTINGS) as Array<keyof PaymentSettings>;
@@ -79,6 +100,15 @@ router.patch("/settings/payment", async (req, res): Promise<void> => {
     usdtErc20Address: typeof req.body?.usdtErc20Address === "string" ? req.body.usdtErc20Address : undefined,
   });
   res.json(settings);
+});
+
+router.get("/settings/sms-log", async (_req, res): Promise<void> => {
+  res.json({ enabled: await getBooleanSetting("smsLog.enabled", true) });
+});
+
+router.patch("/settings/sms-log", async (req, res): Promise<void> => {
+  const enabled = Boolean(req.body?.enabled);
+  res.json({ enabled: await setBooleanSetting("smsLog.enabled", enabled) });
 });
 
 export default router;
