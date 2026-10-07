@@ -17,6 +17,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { logger } from "./logger";
 import { createMiniAppLicense } from "./miniAppLicense";
+import { loadForceJoinChannels, type ForceJoinChannel } from "./forceJoinChannels";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const BOT_USERNAME  = process.env.BOT_USERNAME  || "AnneBella_Sms_Panel_Bot";
@@ -97,13 +98,9 @@ function cleanBotUsername(username: string): string {
 
 const BOT_LINK_USERNAME = cleanBotUsername(BOT_USERNAME);
 
-// Required channels - order determines 2x2 grid layout
-const REQUIRED_CHANNELS = [
-  { id: "@indiagates",         label: "ANNEBELLA",     url: "https://t.me/indiagates",         emojiId: "5372849966689566579" },
-  { id: "@annebellapanel",     label: "PANEL UPDATES", url: "https://t.me/annebellapanel",     emojiId: "6035152649790164056" },
-  { id: "@AnnebellaStorechat", label: "SUPPORT",       url: "https://t.me/AnnebellaStorechat", emojiId: "6026056450223116307" },
-  { id: "@AnneBellaForums",    label: "FORUM",         url: "https://t.me/AnneBellaForums",    emojiId: "6203750195130274981" },
-];
+function requiredChannels(): ForceJoinChannel[] {
+  return loadForceJoinChannels();
+}
 
 let bot: TelegramBot | null = null;
 
@@ -502,8 +499,9 @@ async function hasGetNumberAccess(user: { smsCredits: number }): Promise<boolean
 
 // Check which channels the user has joined (requires bot to be admin in channels)
 async function checkMembership(bot: TelegramBot, telegramId: string): Promise<boolean[]> {
+  const channels = requiredChannels();
   return Promise.all(
-    REQUIRED_CHANNELS.map(async (ch) => {
+    channels.map(async (ch) => {
       try {
         const m = await bot.getChatMember(ch.id, parseInt(telegramId));
         return ["member", "administrator", "creator"].includes(m.status);
@@ -585,9 +583,10 @@ function forceJoinProgress(joinCount: number, total: number): string {
 }
 
 function forceJoinMessage(joined: boolean[]): string {
+  const channels = requiredChannels();
   const joinCount = joined.filter(Boolean).length;
-  const total = REQUIRED_CHANNELS.length;
-  const missing = REQUIRED_CHANNELS
+  const total = channels.length;
+  const missing = channels
     .filter((_, index) => !joined[index])
     .map((channel, index) => `${index + 1}. ${channel.label}`)
     .join("\n");
@@ -611,11 +610,12 @@ function forceJoinMessage(joined: boolean[]): string {
 
 // Build 2x2 inline channel keyboard with join status + premium emoji
 function buildChannelKeyboard(joined: boolean[], allJoined: boolean): { inline_keyboard: any[][] } {
+  const channels = requiredChannels();
   const rows: any[][] = [];
-  for (let i = 0; i < REQUIRED_CHANNELS.length; i += 2) {
+  for (let i = 0; i < channels.length; i += 2) {
     const row: any[] = [];
-    for (let j = i; j < Math.min(i + 2, REQUIRED_CHANNELS.length); j++) {
-      const ch = REQUIRED_CHANNELS[j];
+    for (let j = i; j < Math.min(i + 2, channels.length); j++) {
+      const ch = channels[j];
       const ok = joined[j];
       row.push(iBtn({
         label:   `${ok ? "JOINED" : "JOIN"} - ${ch.label}`,
@@ -978,7 +978,7 @@ function setupHandlers(bot: TelegramBot) {
         // Check which channels user has already joined
         const joined    = await checkMembership(bot, telegramId);
         const joinCount = joined.filter(Boolean).length;
-        const total     = REQUIRED_CHANNELS.length;
+        const total     = requiredChannels().length;
         const allJoined = joinCount === total;
 
         if (allJoined) {
@@ -1889,7 +1889,7 @@ function setupHandlers(bot: TelegramBot) {
         // Live membership check
         const joined    = await checkMembership(bot, telegramId);
         const joinCount = joined.filter(Boolean).length;
-        const total     = REQUIRED_CHANNELS.length;
+        const total     = requiredChannels().length;
         const allJoined = joinCount === total;
 
         if (!allJoined) {
