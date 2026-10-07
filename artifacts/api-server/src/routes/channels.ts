@@ -1,54 +1,40 @@
 import { Router, type IRouter } from "express";
-import fs from "fs";
-import path from "path";
+import {
+  loadForceJoinChannels,
+  saveForceJoinChannels,
+  upsertForceJoinChannel,
+} from "../lib/forceJoinChannels";
 
 const router: IRouter = Router();
-const CHANNELS_FILE = path.join(process.cwd(), "channels.json");
-
-const DEFAULT_CHANNELS = [
-  { id: "@indiagates",         label: "AnneBella Network", url: "https://t.me/indiagates" },
-  { id: "@annebellapanel",     label: "Panel Update",       url: "https://t.me/annebellapanel" },
-  { id: "@AnnebellaStorechat", label: "Support Group",      url: "https://t.me/AnnebellaStorechat" },
-  { id: "@AnneBellaForums",    label: "Forum",              url: "https://t.me/AnneBellaForums" },
-];
-
-export function loadChannels(): typeof DEFAULT_CHANNELS {
-  try {
-    if (fs.existsSync(CHANNELS_FILE)) {
-      return JSON.parse(fs.readFileSync(CHANNELS_FILE, "utf-8"));
-    }
-  } catch {}
-  return DEFAULT_CHANNELS;
-}
-
-function saveChannels(channels: typeof DEFAULT_CHANNELS) {
-  fs.writeFileSync(CHANNELS_FILE, JSON.stringify(channels, null, 2));
-}
 
 router.get("/channels", (_req, res) => {
-  res.json(loadChannels());
+  res.json(loadForceJoinChannels());
 });
 
 router.post("/channels", (req, res) => {
-  const { id, label, url } = req.body;
-  if (!id || !label || !url) {
-    res.status(400).json({ error: "id, label, url required" });
-    return;
+  try {
+    res.status(201).json(upsertForceJoinChannel(req.body));
+  } catch (err) {
+    res.status(err instanceof Error && err.message.includes("exists") ? 409 : 400).json({
+      error: err instanceof Error ? err.message : "Unable to save channel",
+    });
   }
-  const channels = loadChannels();
-  if (channels.find(c => c.id === id)) {
-    res.status(409).json({ error: "Channel already exists" });
-    return;
+});
+
+router.patch("/channels/:id", (req, res) => {
+  try {
+    res.json(upsertForceJoinChannel(req.body, decodeURIComponent(req.params.id)));
+  } catch (err) {
+    res.status(err instanceof Error && err.message.includes("exists") ? 409 : 400).json({
+      error: err instanceof Error ? err.message : "Unable to update channel",
+    });
   }
-  channels.push({ id, label, url });
-  saveChannels(channels);
-  res.status(201).json(channels);
 });
 
 router.delete("/channels/:id", (req, res) => {
   const id = decodeURIComponent(req.params.id);
-  const channels = loadChannels().filter(c => c.id !== id);
-  saveChannels(channels);
+  const channels = loadForceJoinChannels().filter(c => c.id !== id);
+  saveForceJoinChannels(channels);
   res.json(channels);
 });
 
