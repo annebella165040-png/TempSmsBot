@@ -1790,7 +1790,7 @@ function setupHandlers(bot: TelegramBot) {
           `${divider()}\n\n` +
           `${em(E.credits, "")} <b>SELECT A CREDIT PACKAGE</b>\n` +
           `Package select karne ke baad payment method choose karo: UPI ya USDT.\n\n` +
-          tableBlock(["CR", "PRICE"], creditPackageRows) +
+          tableBlock(["CREDIT", "PRICE"], creditPackageRows) +
           `\n\n` +
           `${em(E.history, "")} Payment complete karke screenshot yahi bot mein bhejo for approval.`,
           {
@@ -1800,7 +1800,7 @@ function setupHandlers(bot: TelegramBot) {
               `${divider()}\n\n` +
               `${em(E.credits, "")} <b>SELECT A CREDIT PACKAGE</b>\n` +
               `Package select karne ke baad payment method choose karo: UPI ya USDT.\n\n` +
-              richTableBlock(["CR", "PRICE"], creditPackageRows, [E.credits, E.credits, E.crown, E.fire]) +
+              richTableBlock(["CREDIT", "PRICE"], creditPackageRows, [E.credits, E.credits, E.crown, E.fire]) +
               `\n\n${em(E.history, "")} Payment complete karke screenshot yahi bot mein bhejo for approval.`,
             reply_markup: {
               inline_keyboard: [
