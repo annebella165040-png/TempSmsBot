@@ -951,6 +951,10 @@ function numberState(liveSmsReceived = false): string {
   return JSON.stringify({ numberCreditCharged: true, liveSmsReceived } satisfies NumberCreditState);
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function refundNumberCreditIfUnused(user: { id: number; smsCredits: number; stateData: string | null }) {
   const data = parseStateData<NumberCreditState>(user.stateData);
   if (!data?.numberCreditCharged || data.liveSmsReceived) return user.smsCredits;
@@ -1064,6 +1068,45 @@ function setupHandlers(bot: TelegramBot) {
     }
   };
 
+  const streamAiDraft = async (
+    cid: number,
+    finalHtml: string,
+    opts: Record<string, any> = {},
+  ): Promise<boolean> => {
+    const draftId = Math.floor(Date.now() % 2147480000) || 1;
+    const html = sc(finalHtml);
+    const plainPreview = stripHtmlToText(html).slice(0, 900);
+    let sentAnyDraft = false;
+
+    for (let i = 18; i <= plainPreview.length; i += 18) {
+      const result = await rawTelegramRequest("sendMessageDraft", {
+        chat_id: cid,
+        draft_id: draftId,
+        text: plainPreview.slice(0, i),
+        can_stop: true,
+      });
+      if (!result.ok) {
+        logger.warn({ description: result.description }, "AI draft stream failed");
+        break;
+      }
+      sentAnyDraft = true;
+      await wait(360);
+    }
+
+    if (sentAnyDraft && plainPreview.length) {
+      await rawTelegramRequest("sendMessageDraft", {
+        chat_id: cid,
+        draft_id: draftId,
+        text: plainPreview,
+        can_stop: true,
+      }).catch(() => {});
+      await wait(500);
+    }
+
+    await send(cid, finalHtml, opts);
+    return sentAnyDraft;
+  };
+
   const sendPaymentProofToOwner = async (
     proofMessage: Message,
     user: typeof botUsersTable.$inferSelect,
@@ -1164,6 +1207,22 @@ function setupHandlers(bot: TelegramBot) {
           forceJoinMessage(liveJoined),
           { parse_mode: "HTML", reply_markup: buildChannelKeyboard(liveJoined, false) }
         );
+        return;
+      }
+
+      if (text.toLowerCase() === "/aitest") {
+        const finalHtml =
+          `${em(E.sparkle, "")} <b>AI STREAMING PREVIEW</b>\n` +
+          `${divider()}\n\n` +
+          `${em(E.lightning, "")} Telegram live draft streaming enabled.\n` +
+          `${em(E.sms, "")} Text appears progressively before the final message.\n` +
+          `${em(E.check, "")} Final response is saved as a normal bot message.\n\n` +
+          `${divider()}\n` +
+          `${em(E.rocket, "")} This preview can be used for future smart replies.`;
+        await streamAiDraft(chatId, finalHtml, {
+          parse_mode: "HTML",
+          reply_markup: mainMenuKeyboard() as any,
+        });
         return;
       }
 
