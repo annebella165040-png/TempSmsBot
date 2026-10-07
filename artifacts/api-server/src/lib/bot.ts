@@ -1163,7 +1163,7 @@ function setupHandlers(bot: TelegramBot) {
         const allJoined = joinCount === total;
 
         if (allJoined) {
-          await send(
+          await streamAiDraft(
             chatId,
             welcomeMessage(user.firstName, user.smsCredits),
             { parse_mode: "HTML", reply_markup: { remove_keyboard: true } }
@@ -1207,22 +1207,6 @@ function setupHandlers(bot: TelegramBot) {
           forceJoinMessage(liveJoined),
           { parse_mode: "HTML", reply_markup: buildChannelKeyboard(liveJoined, false) }
         );
-        return;
-      }
-
-      if (text.toLowerCase() === "/aitest") {
-        const finalHtml =
-          `${em(E.sparkle, "")} <b>AI STREAMING PREVIEW</b>\n` +
-          `${divider()}\n\n` +
-          `${em(E.lightning, "")} Telegram live draft streaming enabled.\n` +
-          `${em(E.sms, "")} Text appears progressively before the final message.\n` +
-          `${em(E.check, "")} Final response is saved as a normal bot message.\n\n` +
-          `${divider()}\n` +
-          `${em(E.rocket, "")} This preview can be used for future smart replies.`;
-        await streamAiDraft(chatId, finalHtml, {
-          parse_mode: "HTML",
-          reply_markup: mainMenuKeyboard() as any,
-        });
         return;
       }
 
@@ -1336,7 +1320,7 @@ function setupHandlers(bot: TelegramBot) {
           takenAt: Date.now(),
         });
 
-        await send(
+        await streamAiDraft(
           chatId,
           generatedNumberMessage(device, displayPhone, creditsAfterPurchase),
           {
@@ -1410,7 +1394,7 @@ function setupHandlers(bot: TelegramBot) {
           takenAt: Date.now(),
         });
 
-        await send(
+        await streamAiDraft(
           chatId,
           generatedNumberMessage(device2, displayPhone2, creditsAfterPurchase2),
           {
@@ -1629,7 +1613,7 @@ function setupHandlers(bot: TelegramBot) {
           ["RATE", `${activeRate}%`],
         ];
 
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.check, "")} <b>STATUS REPORT</b>\n` +
           `${divider()}\n\n` +
@@ -1687,7 +1671,7 @@ function setupHandlers(bot: TelegramBot) {
 
  const referralLink = `https://t.me/${BOT_LINK_USERNAME}?start=${user.referralCode}`;
 
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.coin, "")} <b>REFERRAL SYSTEM</b>\n` +
           `${divider()}\n\n` +
@@ -1815,7 +1799,7 @@ function setupHandlers(bot: TelegramBot) {
         const sendSms = user.sendSmsUnlocked ? `UNLOCKED - outbound SMS enabled` : `LOCKED - complete referral requirement`;
         const usernameLine = user.username ? `@${escapeTelegramHtml(user.username)}` : "Not connected";
 
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.profile, "")} <b>MY PROFILE</b>\n` +
           `${divider()}\n\n` +
@@ -1843,7 +1827,7 @@ function setupHandlers(bot: TelegramBot) {
           ["1000", "₹349"],
           ["5000", "₹999"],
         ];
-        await send(
+        await streamAiDraft(
           chatId,
           `${em(E.buy, "")} <b>BUY CREDITS</b>\n` +
           `${divider()}\n\n` +
@@ -1882,7 +1866,7 @@ function setupHandlers(bot: TelegramBot) {
       }
 
       if (text === sct("SUPPORT ( DEVELOPER )")) {
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.support, "")} <b>SUPPORT</b>\n` +
           `${divider()}\n\n` +
@@ -2137,7 +2121,7 @@ function setupHandlers(bot: TelegramBot) {
           await bot.deleteMessage(chatId, query.message.message_id);
         } catch { /* ignore if already deleted */ }
 
-        await send(
+        await streamAiDraft(
           chatId,
           welcomeMessage(user.firstName, user.smsCredits),
           { parse_mode: "HTML", reply_markup: { remove_keyboard: true } }
