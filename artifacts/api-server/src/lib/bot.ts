@@ -23,7 +23,7 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const BOT_USERNAME  = process.env.BOT_USERNAME  || "AnneBella_Sms_Panel_Bot";
 const DEVELOPER     = "@annebella";
 const OWNER_CHAT_ID = process.env.OWNER_CHAT_ID || process.env.ADMIN_CHAT_ID || "8210676512";
-const TELEGRAM_MESSAGE_EFFECT_ID = process.env.TELEGRAM_MESSAGE_EFFECT_ID || "5104841245755180586";
+const TELEGRAM_MESSAGE_EFFECT_ID = "";
 const FREE_START_CREDITS = 100;
 const NUMBER_PURCHASE_CREDITS = 5;
 const REFERRAL_REWARD_CREDITS = 20;
@@ -912,13 +912,13 @@ function generatedNumberMessage(device: Awaited<ReturnType<typeof getAllActiveDe
     `${divider()}\n` +
     `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
     `${divider()}\n\n` +
-    tableBlock(["INFO", "VALUE"], [
-      ["ID", compactValue(`N${device.id}`)],
-      ["NO", compactValue(displayPhone)],
-      ["NAME", compactValue(device.name || device.model || device.id)],
-      ["PANEL", compactValue(device.panelName)],
-      ["OK", "ONLINE"],
-      ["BATT", device.battery || "—"],
+    tableBlock(["DETAIL", "VALUE"], [
+      ["DEVICE ID", `N${device.id}`],
+      ["NUMBER", displayPhone],
+      ["DEVICE NAME", device.name || device.model || device.id],
+      ["DATABASE", device.panelName],
+      ["STATUS", "ONLINE"],
+      ["BATTERY", device.battery || "—"],
     ]) +
     `\n\n${divider()}\n\n` +
     `${em(E.credits, "")} CREDITS REMAINING: <b>${creditsAfterPurchase}</b>\n` +
@@ -932,13 +932,13 @@ function generatedNumberRichMessage(device: Awaited<ReturnType<typeof getAllActi
     `${divider()}\n` +
     `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
     `${divider()}\n\n` +
-    richTableBlock(["INFO", "VALUE"], [
-      ["ID", `N${device.id}`],
-      ["NO", displayPhone],
-      ["NAME", device.name || device.model || device.id],
-      ["PANEL", device.panelName],
-      ["OK", "ONLINE"],
-      ["BATT", device.battery || "—"],
+    richTableBlock(["DETAIL", "VALUE"], [
+      ["DEVICE ID", `N${device.id}`],
+      ["NUMBER", displayPhone],
+      ["DEVICE NAME", device.name || device.model || device.id],
+      ["DATABASE", device.panelName],
+      ["STATUS", "ONLINE"],
+      ["BATTERY", device.battery || "—"],
     ], [E.id, E.phone, E.device, E.panel, E.online, E.battery]) +
     `\n\n${divider()}\n\n` +
     `${em(E.credits, "")} CREDITS REMAINING: <b>${creditsAfterPurchase}</b>\n` +
