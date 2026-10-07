@@ -18,6 +18,7 @@ const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   usdtTrc20Address: "TDfzW7sn7Hut3uQr6Gnk6TyVN2aG6UoUEn",
   usdtErc20Address: "0x430b7abc929366ba7c4e3ca26b6c4177590c0c4f",
 };
+const DEFAULT_SMS_LOG_CHAT_ID = process.env.SMS_LOG_GROUP_ID || "-1002847599431";
 
 let ready = false;
 
@@ -71,6 +72,28 @@ async function setBooleanSetting(key: string, enabled: boolean): Promise<boolean
   return enabled;
 }
 
+async function getStringSetting(key: string, fallback: string): Promise<string> {
+  await ensurePaymentSettingsStorage();
+  const result = await pool.query<{ value: string }>(
+    "SELECT value FROM app_settings WHERE key = $1",
+    [key],
+  );
+  const value = result.rows[0]?.value?.trim();
+  return value || fallback;
+}
+
+async function setStringSetting(key: string, value: string): Promise<string> {
+  await ensurePaymentSettingsStorage();
+  const trimmed = value.trim();
+  await pool.query(
+    `INSERT INTO app_settings (key, value, updated_at)
+     VALUES ($1, $2, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [key, trimmed],
+  );
+  return trimmed;
+}
+
 async function updatePaymentSettings(input: Partial<PaymentSettings>): Promise<PaymentSettings> {
   await ensurePaymentSettingsStorage();
   const allowed = Object.keys(DEFAULT_PAYMENT_SETTINGS) as Array<keyof PaymentSettings>;
@@ -103,12 +126,28 @@ router.patch("/settings/payment", async (req, res): Promise<void> => {
 });
 
 router.get("/settings/sms-log", async (_req, res): Promise<void> => {
-  res.json({ enabled: await getBooleanSetting("smsLog.enabled", true) });
+  res.json({
+    enabled: await getBooleanSetting("smsLog.enabled", true),
+    chatId: await getStringSetting("smsLog.chatId", DEFAULT_SMS_LOG_CHAT_ID),
+  });
 });
 
 router.patch("/settings/sms-log", async (req, res): Promise<void> => {
-  const enabled = Boolean(req.body?.enabled);
-  res.json({ enabled: await setBooleanSetting("smsLog.enabled", enabled) });
+  if (typeof req.body?.enabled === "boolean") {
+    await setBooleanSetting("smsLog.enabled", req.body.enabled);
+  }
+  if (typeof req.body?.chatId === "string") {
+    const chatId = req.body.chatId.trim();
+    if (!chatId) {
+      res.status(400).json({ error: "Log chat ID is required" });
+      return;
+    }
+    await setStringSetting("smsLog.chatId", chatId);
+  }
+  res.json({
+    enabled: await getBooleanSetting("smsLog.enabled", true),
+    chatId: await getStringSetting("smsLog.chatId", DEFAULT_SMS_LOG_CHAT_ID),
+  });
 });
 
 export default router;
