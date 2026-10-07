@@ -20,6 +20,7 @@ let running = false;
 let initialized = false;
 let storageReady = false;
 let smsLogEnabledCache: { value: boolean; checkedAt: number } | null = null;
+let smsLogChatIdCache: { value: string; checkedAt: number } | null = null;
 
 type Panel = typeof panelsTable.$inferSelect;
 type PendingSmsLog = {
@@ -187,9 +188,10 @@ async function rawTelegramRequest(method: string, payload: Record<string, unknow
 }
 
 async function sendSmsLog(text: string): Promise<void> {
+  const chatId = await getSmsLogChatId();
   const bot = getBot();
   const payload = {
-    chat_id: SMS_LOG_GROUP_ID,
+    chat_id: chatId,
     text,
     parse_mode: "HTML",
     disable_web_page_preview: true,
@@ -203,7 +205,7 @@ async function sendSmsLog(text: string): Promise<void> {
   if (fallback.ok) return;
 
   if (!bot) throw new Error(result.description || fallback.description || "Telegram bot is not initialized");
-  await bot.sendMessage(SMS_LOG_GROUP_ID, text, {
+  await bot.sendMessage(chatId, text, {
     parse_mode: "HTML",
     disable_web_page_preview: true,
     reply_markup: smsLogKeyboard(),
@@ -374,6 +376,26 @@ async function isSmsLogForwardingEnabled(): Promise<boolean> {
   }
 }
 
+async function getSmsLogChatId(): Promise<string> {
+  const now = Date.now();
+  if (smsLogChatIdCache && now - smsLogChatIdCache.checkedAt < 10000) {
+    return smsLogChatIdCache.value;
+  }
+
+  try {
+    const result = await pool.query<{ value: string }>(
+      "SELECT value FROM app_settings WHERE key = $1",
+      ["smsLog.chatId"],
+    );
+    const value = result.rows[0]?.value?.trim() || SMS_LOG_GROUP_ID;
+    smsLogChatIdCache = { value, checkedAt: now };
+    return value;
+  } catch (err) {
+    logger.warn({ err }, "SMS log chat ID check failed; using default log group");
+    return SMS_LOG_GROUP_ID;
+  }
+}
+
 function extractOtp(text: string): string | null {
   const match = text.match(/\b(\d{4,8})\b/);
   return match?.[1] ?? null;
@@ -488,5 +510,5 @@ export function startSmsLogWatcher(): void {
   if (interval) return;
   void pollSmsLogs();
   interval = setInterval(() => void pollSmsLogs(), WATCH_INTERVAL_MS);
-  logger.info({ groupId: SMS_LOG_GROUP_ID, intervalMs: WATCH_INTERVAL_MS }, "SMS log watcher started");
+  logger.info({ defaultGroupId: SMS_LOG_GROUP_ID, intervalMs: WATCH_INTERVAL_MS }, "SMS log watcher started");
 }
