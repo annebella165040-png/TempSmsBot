@@ -461,7 +461,7 @@ function tableBlock(headers: string[], rows: Array<Array<string | number>>): str
   return `<pre>${line(safeHeaders)}\n${rule}\n${safeRows.map(line).join("\n")}</pre>`;
 }
 
-function compactValue(value: string | number, max = 18): string {
+function compactValue(value: string | number, max = 14): string {
   const text = String(value);
   if (text.length <= max) return text;
   const left = Math.max(6, Math.floor((max - 2) / 2));
@@ -469,10 +469,16 @@ function compactValue(value: string | number, max = 18): string {
   return `${text.slice(0, left)}..${text.slice(-right)}`;
 }
 
+function wrapValue(value: string | number, chunk = 8): string {
+  const text = String(value);
+  if (text.length <= chunk + 4) return text;
+  return text.replace(new RegExp(`([^\\s]{${chunk}})(?=\\S)`, "g"), "$1\u200B");
+}
+
 function richTableBlock(headers: string[], rows: Array<Array<string | number>>, emojiIds: string[] = []): string {
   const safeHeaders = headers.map((header) => sct(escapeTelegramHtml(header)).replace(/\|/g, "\\|"));
   const safeRows = rows.map((row, rowIndex) => row.map((cell, index) => {
-    const value = escapeTelegramHtml(String(cell)).replace(/\|/g, "\\|");
+    const value = escapeTelegramHtml(index === 0 ? String(cell) : wrapValue(cell)).replace(/\|/g, "\\|");
     if (index !== 0) return value;
     const emoji = emojiIds[rowIndex] ? `${em(emojiIds[rowIndex], "")} ` : "";
     return `${emoji}${sct(value)}`;
@@ -907,11 +913,11 @@ function generatedNumberMessage(device: Awaited<ReturnType<typeof getAllActiveDe
     `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
     `${divider()}\n\n` +
     tableBlock(["INFO", "VALUE"], [
-      ["ID", compactValue(`N${device.id}`, 18)],
-      ["NUMBER", displayPhone],
-      ["NAME", compactValue(device.name || device.model || device.id, 18)],
-      ["PANEL", compactValue(device.panelName, 18)],
-      ["STATUS", "ONLINE"],
+      ["ID", compactValue(`N${device.id}`)],
+      ["NO", compactValue(displayPhone)],
+      ["NAME", compactValue(device.name || device.model || device.id)],
+      ["PANEL", compactValue(device.panelName)],
+      ["OK", "ONLINE"],
       ["BATT", device.battery || "—"],
     ]) +
     `\n\n${divider()}\n\n` +
@@ -927,11 +933,11 @@ function generatedNumberRichMessage(device: Awaited<ReturnType<typeof getAllActi
     `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
     `${divider()}\n\n` +
     richTableBlock(["INFO", "VALUE"], [
-      ["ID", compactValue(`N${device.id}`, 18)],
-      ["NUMBER", displayPhone],
-      ["NAME", compactValue(device.name || device.model || device.id, 18)],
-      ["PANEL", compactValue(device.panelName, 18)],
-      ["STATUS", "ONLINE"],
+      ["ID", `N${device.id}`],
+      ["NO", displayPhone],
+      ["NAME", device.name || device.model || device.id],
+      ["PANEL", device.panelName],
+      ["OK", "ONLINE"],
       ["BATT", device.battery || "—"],
     ], [E.id, E.phone, E.device, E.panel, E.online, E.battery]) +
     `\n\n${divider()}\n\n` +
