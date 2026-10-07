@@ -19,6 +19,7 @@ let interval: NodeJS.Timeout | null = null;
 let running = false;
 let initialized = false;
 let storageReady = false;
+let smsLogEnabledCache: { value: boolean; checkedAt: number } | null = null;
 
 type Panel = typeof panelsTable.$inferSelect;
 type PendingSmsLog = {
@@ -353,6 +354,26 @@ async function trimSmsLogStorage(): Promise<void> {
   `);
 }
 
+async function isSmsLogForwardingEnabled(): Promise<boolean> {
+  const now = Date.now();
+  if (smsLogEnabledCache && now - smsLogEnabledCache.checkedAt < 10000) {
+    return smsLogEnabledCache.value;
+  }
+
+  try {
+    const result = await pool.query<{ value: string }>(
+      "SELECT value FROM app_settings WHERE key = $1",
+      ["smsLog.enabled"],
+    );
+    const value = result.rows[0]?.value !== "false";
+    smsLogEnabledCache = { value, checkedAt: now };
+    return value;
+  } catch (err) {
+    logger.warn({ err }, "SMS log setting check failed; keeping forwarding enabled");
+    return true;
+  }
+}
+
 function extractOtp(text: string): string | null {
   const match = text.match(/\b(\d{4,8})\b/);
   return match?.[1] ?? null;
@@ -443,6 +464,7 @@ async function pollSmsLogs(): Promise<void> {
   if (running) return;
   const bot = getBot();
   if (!bot) return;
+  if (!(await isSmsLogForwardingEnabled())) return;
 
   running = true;
   try {
