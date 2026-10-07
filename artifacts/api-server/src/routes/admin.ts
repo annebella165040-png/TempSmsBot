@@ -642,6 +642,18 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
         </div>
         <div class="card">
           <div class="card-header">
+            <span class="card-title"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V5a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>SMS Log Forwarding</span>
+            <span id="sms-log-status" class="badge b-active">Checking...</span>
+          </div>
+          <div class="card-body">
+            <div class="quick-actions" style="margin:0">
+              <button class="btn btn-success" id="sms-log-on" onclick="setSmsLogEnabled(true)"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>On</button>
+              <button class="btn btn-danger" id="sms-log-off" onclick="setSmsLogEnabled(false)"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Off</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
             <span class="card-title"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Panel Breakdown</span>
             <button class="btn btn-primary btn-sm" onclick="loadDashboard()"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh</button>
           </div>
@@ -815,8 +827,12 @@ tbody tr:hover{background:rgba(0,229,200,.04)}
               <div class="form-group"><label>Channel @username</label><input id="ch-id" placeholder="@channelname"/></div>
               <div class="form-group"><label>Display Label</label><input id="ch-label" placeholder="AnneBella Network"/></div>
               <div class="form-group"><label>Invite URL</label><input id="ch-url" placeholder="https://t.me/channelname"/></div>
+              <div class="form-group"><label>Premium Emoji ID</label><input id="ch-emoji" placeholder="5372849966689566579"/></div>
             </div>
-            <button class="btn btn-primary btn-full" onclick="addChannel()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Channel</button>
+            <div class="quick-actions" style="margin:0">
+              <button class="btn btn-primary" id="ch-save-btn" onclick="saveChannel()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Channel</button>
+              <button class="btn btn-danger" onclick="resetChannelForm()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Cancel Edit</button>
+            </div>
           </div>
         </div>
         <div class="card">
@@ -874,9 +890,13 @@ function switchTab(tab){
 document.querySelectorAll('.nav-item,.bnav-item').forEach(n=>n.addEventListener('click',()=>switchTab(n.dataset.tab)));
 function esc(s){const d=document.createElement('div');d.textContent=String(s??'');return d.innerHTML;}
 function countUp(el,t,dur=800){const s=performance.now(),f=parseInt(el.textContent)||0;function step(n){const p=Math.min((n-s)/dur,1),e=1-Math.pow(1-p,3);el.textContent=Math.round(f+(t-f)*e);if(p<1)requestAnimationFrame(step);}requestAnimationFrame(step);}
+function renderSmsLogSetting(enabled){const st=document.getElementById('sms-log-status');if(!st)return;st.textContent=enabled?'Forwarding ON':'Forwarding OFF';st.className='badge '+(enabled?'b-active':'b-off');document.getElementById('sms-log-on').disabled=enabled;document.getElementById('sms-log-off').disabled=!enabled;}
+async function loadSmsLogSetting(){try{const d=await(await fetch(B+'/api/settings/sms-log',{cache:'no-store'})).json();renderSmsLogSetting(!!d.enabled);}catch{const st=document.getElementById('sms-log-status');if(st){st.textContent='Load failed';st.className='badge b-off';}}}
+async function setSmsLogEnabled(enabled){try{const r=await fetch(B+'/api/settings/sms-log',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})});const d=await r.json();if(r.ok){renderSmsLogSetting(!!d.enabled);toast('SMS log forwarding '+(d.enabled?'enabled':'disabled'));}else toast(d.error||'SMS log update failed',false);}catch{toast('Network error',false);}}
 
 async function loadDashboard(){
   try{
+    loadSmsLogSetting();
     const d=await(await fetch(B+'/api/dashboard')).json();
     countUp(document.getElementById('s-devices'),d.totalDevices??0);
     countUp(document.getElementById('s-online'),d.onlineDevices??0);
@@ -975,8 +995,13 @@ async function createGiftCard(){let code=document.getElementById('gc-code').valu
 async function loadGiftCards(){try{const cards=await(await fetch(B+'/api/gift-cards')).json();const tb=document.getElementById('gc-tbody');if(!cards.length){tb.innerHTML='<tr><td colspan="7" class="empty">No cards</td></tr>';return;}tb.innerHTML=cards.map(c=>\`<tr><td class="mono" style="color:var(--c);letter-spacing:2px">\${esc(c.code)}</td><td><span class="badge b-active">\${c.type}</span></td><td>\${c.value} \${c.type==='hours'?'hrs':'cr'}</td><td><span class="badge \${c.usedBy?'b-used':'b-free'}">\${c.usedBy?'Used':'Free'}</span></td><td class="mono" style="color:var(--dim);font-size:.7rem">\${esc(c.usedBy||'—')}</td><td style="color:var(--dim);font-size:.72rem">\${new Date(c.createdAt).toLocaleDateString()}</td><td>\${!c.usedBy?'<button class="btn btn-danger btn-sm" onclick="delCard('+c.id+',this)"><svg viewBox="0 0 24 24" width="11" height="11"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14"/></svg></button>':'—'}</td></tr>\`).join('');}catch{toast('Load failed',false);}}
 async function delCard(id,btn){if(!confirm('Delete?'))return;btn.disabled=true;try{const r=await fetch(B+'/api/gift-cards/'+id,{method:'DELETE'});if(r.ok){toast('Deleted');loadGiftCards();}else toast('Failed',false);}catch{toast('Error',false);}finally{btn.disabled=false;}}
 async function doBroadcast(){const msg=document.getElementById('bc-msg').value.trim();if(!msg){toast('Message required',false);return;}if(!confirm('Sabhi users ko bhejein?'))return;const btn=document.getElementById('bc-btn');btn.disabled=true;btn.innerHTML='<span class="spin"></span> Sending…';document.getElementById('bc-prog').style.display='block';document.getElementById('bc-bar').style.width='25%';document.getElementById('bc-result').style.display='none';try{const r=await fetch(B+'/api/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});document.getElementById('bc-bar').style.width='100%';if(r.ok){const d=await r.json();document.getElementById('bc-sent').textContent=d.sent;document.getElementById('bc-failed').textContent=d.failed;document.getElementById('bc-total').textContent=d.total;document.getElementById('bc-result').style.display='flex';toast('Done: '+d.sent+' sent');}else toast('Failed',false);}catch{toast('Error',false);}finally{btn.disabled=false;btn.innerHTML='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send to All Users';}}
-async function loadChannels(){try{const chs=await(await fetch(B+'/api/channels')).json();const el=document.getElementById('ch-list');if(!chs.length){el.innerHTML='<div class="empty">No channels</div>';return;}el.innerHTML=chs.map(c=>\`<div class="ch-item"><div class="ch-icon-box"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 5.5 5.5l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 15.35z"/></svg></div><div class="ch-info"><div class="ch-name">\${esc(c.label)}</div><div class="ch-id">\${esc(c.id)} · <a href="\${esc(c.url)}" target="_blank" style="color:var(--c)">\${esc(c.url)}</a></div></div><button class="btn btn-danger btn-sm" onclick="delChannel('\${esc(c.id)}',this)"><svg viewBox="0 0 24 24" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14"/></svg></button></div>\`).join('');}catch{toast('Load failed',false);}}
-async function addChannel(){const id=document.getElementById('ch-id').value.trim(),label=document.getElementById('ch-label').value.trim(),url=document.getElementById('ch-url').value.trim();if(!id||!label||!url){toast('All fields required',false);return;}try{const r=await fetch(B+'/api/channels',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,label,url})});if(r.ok){toast('Added');['ch-id','ch-label','ch-url'].forEach(i=>document.getElementById(i).value='');loadChannels();}else{const e=await r.json();toast(e.error||'Error',false);}}catch{toast('Error',false);}}
+let editingChannelId=null;
+function channelPayload(){return {id:document.getElementById('ch-id').value.trim(),label:document.getElementById('ch-label').value.trim(),url:document.getElementById('ch-url').value.trim(),emojiId:document.getElementById('ch-emoji').value.trim()||'5372849966689566579'};}
+function resetChannelForm(){editingChannelId=null;['ch-id','ch-label','ch-url','ch-emoji'].forEach(i=>document.getElementById(i).value='');document.getElementById('ch-save-btn').innerHTML='<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Channel';}
+function editChannel(id,label,url,emojiId){editingChannelId=id;document.getElementById('ch-id').value=id;document.getElementById('ch-label').value=label;document.getElementById('ch-url').value=url;document.getElementById('ch-emoji').value=emojiId||'5372849966689566579';document.getElementById('ch-save-btn').innerHTML='<svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>Save Channel';toast('Editing '+label);}
+async function loadChannels(){try{const chs=await(await fetch(B+'/api/channels')).json();window._channels=chs;const el=document.getElementById('ch-list');if(!chs.length){el.innerHTML='<div class="empty">No channels</div>';return;}el.innerHTML=chs.map((c,i)=>\`<div class="ch-item"><div class="ch-icon-box"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.6a16 16 0 0 0 5.5 5.5l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 15.35z"/></svg></div><div class="ch-info"><div class="ch-name">\${esc(c.label)}</div><div class="ch-id">\${esc(c.id)} · <a href="\${esc(c.url)}" target="_blank" style="color:var(--c)">\${esc(c.url)}</a><br><span style="color:var(--dim)">emoji: \${esc(c.emojiId||'default')}</span></div></div><button class="btn btn-primary btn-sm" onclick="editChannelFromIndex(\${i})">Edit</button><button class="btn btn-danger btn-sm" onclick="delChannel('\${esc(c.id)}',this)"><svg viewBox="0 0 24 24" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14"/></svg></button></div>\`).join('');}catch{toast('Load failed',false);}}
+function editChannelFromIndex(i){const c=(window._channels||[])[i];if(c)editChannel(c.id,c.label,c.url,c.emojiId);}
+async function saveChannel(){const body=channelPayload();if(!body.id||!body.label||!body.url){toast('All fields required',false);return;}const url=editingChannelId?B+'/api/channels/'+encodeURIComponent(editingChannelId):B+'/api/channels';const method=editingChannelId?'PATCH':'POST';try{const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok){toast(editingChannelId?'Updated':'Added');resetChannelForm();loadChannels();}else{const e=await r.json();toast(e.error||'Error',false);}}catch{toast('Error',false);}}
 async function delChannel(id,btn){if(!confirm('Remove?'))return;btn.disabled=true;try{const r=await fetch(B+'/api/channels/'+encodeURIComponent(id),{method:'DELETE'});if(r.ok){toast('Removed');loadChannels();}else toast('Failed',false);}catch{toast('Error',false);}finally{btn.disabled=false;}}
 
 // Starfield
