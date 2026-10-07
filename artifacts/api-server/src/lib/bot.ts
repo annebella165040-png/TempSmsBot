@@ -1078,7 +1078,7 @@ function setupHandlers(bot: TelegramBot) {
     const plainPreview = stripHtmlToText(html).slice(0, 900);
     let sentAnyDraft = false;
 
-    for (let i = 45; i <= plainPreview.length; i += 45) {
+    for (let i = 85; i <= plainPreview.length; i += 85) {
       const result = await rawTelegramRequest("sendMessageDraft", {
         chat_id: cid,
         draft_id: draftId,
@@ -1090,7 +1090,7 @@ function setupHandlers(bot: TelegramBot) {
         break;
       }
       sentAnyDraft = true;
-      await wait(140);
+      await wait(70);
     }
 
     if (sentAnyDraft && plainPreview.length) {
@@ -1100,7 +1100,7 @@ function setupHandlers(bot: TelegramBot) {
         text: plainPreview,
         can_stop: true,
       }).catch(() => {});
-      await wait(180);
+      await wait(80);
     }
 
     await send(cid, finalHtml, opts);
@@ -1320,7 +1320,7 @@ function setupHandlers(bot: TelegramBot) {
           takenAt: Date.now(),
         });
 
-        await streamAiDraft(
+        await send(
           chatId,
           generatedNumberMessage(device, displayPhone, creditsAfterPurchase),
           {
@@ -1394,7 +1394,7 @@ function setupHandlers(bot: TelegramBot) {
           takenAt: Date.now(),
         });
 
-        await streamAiDraft(
+        await send(
           chatId,
           generatedNumberMessage(device2, displayPhone2, creditsAfterPurchase2),
           {
