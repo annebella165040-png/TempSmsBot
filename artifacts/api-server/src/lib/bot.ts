@@ -461,6 +461,19 @@ function tableBlock(headers: string[], rows: Array<Array<string | number>>): str
   return `<pre>${line(safeHeaders)}\n${rule}\n${safeRows.map(line).join("\n")}</pre>`;
 }
 
+function richTableBlock(headers: string[], rows: Array<Array<string | number>>): string {
+  const safeHeaders = headers.map((header) => sct(escapeTelegramHtml(header)).replace(/\|/g, "\\|"));
+  const safeRows = rows.map((row) => row.map((cell, index) => {
+    const value = escapeTelegramHtml(String(cell)).replace(/\|/g, "\\|");
+    return index === 0 ? sct(value) : value;
+  }));
+  return [
+    `| ${safeHeaders.join(" | ")} |`,
+    `| ${safeHeaders.map(() => ":---").join(" | ")} |`,
+    ...safeRows.map((row) => `| ${row.join(" | ")} |`),
+  ].join("\n");
+}
+
 function generateReferralCode(telegramId: string): string {
  return `ref_${telegramId}`;
 }
@@ -898,6 +911,26 @@ function generatedNumberMessage(device: Awaited<ReturnType<typeof getAllActiveDe
   );
 }
 
+function generatedNumberRichMessage(device: Awaited<ReturnType<typeof getAllActiveDevices>>[number], displayPhone: string, creditsAfterPurchase: number): string {
+  return (
+    `${divider()}\n` +
+    `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
+    `${divider()}\n\n` +
+    richTableBlock(["DETAIL", "VALUE"], [
+      ["DEVICE ID", `N${device.id}`],
+      ["NUMBER", displayPhone],
+      ["DEVICE NAME", device.name || device.model || device.id],
+      ["DATABASE", device.panelName],
+      ["STATUS", "ONLINE"],
+      ["BATTERY", device.battery || "—"],
+    ]) +
+    `\n\n${divider()}\n\n` +
+    `${em(E.credits, "")} CREDITS REMAINING: <b>${creditsAfterPurchase}</b>\n` +
+    `${em(E.refresh, "")} CANCEL BEFORE LIVE SMS = ${NUMBER_PURCHASE_CREDITS} CREDITS REFUND\n` +
+    `${em(E.history, "")} NUMBERS HISTORY MEIN SAVED — ANYTIME DEKHO.`
+  );
+}
+
 function numberState(liveSmsReceived = false): string {
   return JSON.stringify({ numberCreditCharged: true, liveSmsReceived } satisfies NumberCreditState);
 }
@@ -927,6 +960,26 @@ function setupHandlers(bot: TelegramBot) {
   // (node-telegram-bot-api strips unknown fields during serialisation).
   const send = async (cid: number, html: string, opts: Record<string, any> = {}) => {
     await bot.sendChatAction(cid, "typing").catch(() => {});
+    if (typeof opts.rich_markdown === "string") {
+      const payload: Record<string, any> = withMessageEffect({
+        chat_id: cid,
+        rich_message: { markdown: sc(opts.rich_markdown) },
+      });
+      for (const [k, v] of Object.entries(opts)) {
+        if (k !== "rich_markdown" && k !== "parse_mode") payload[k] = v;
+      }
+      const richResult = await rawTelegramRequest("sendRichMessage", payload);
+      if (richResult.ok) return richResult;
+      if (payload.message_effect_id) {
+        const noEffect = await rawTelegramRequest("sendRichMessage", withoutMessageEffect(payload));
+        if (noEffect.ok) return noEffect;
+      }
+      logger.warn({ description: richResult.description }, "Rich message failed, falling back to regular message");
+      const fallbackOpts = { ...opts };
+      delete fallbackOpts.rich_markdown;
+      delete fallbackOpts.message_effect_id;
+      return send(cid, html, fallbackOpts);
+    }
     const rm = opts.reply_markup;
     const hasInline = rm && typeof rm === "object" && "inline_keyboard" in rm;
     if (hasInline) {
@@ -1211,7 +1264,11 @@ function setupHandlers(bot: TelegramBot) {
         await send(
           chatId,
           generatedNumberMessage(device, displayPhone, creditsAfterPurchase),
-          { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
+          {
+            parse_mode: "HTML",
+            reply_markup: numberMenuKeyboard() as any,
+            rich_markdown: generatedNumberRichMessage(device, displayPhone, creditsAfterPurchase),
+          }
         );
         return;
       }
@@ -1281,7 +1338,11 @@ function setupHandlers(bot: TelegramBot) {
         await send(
           chatId,
           generatedNumberMessage(device2, displayPhone2, creditsAfterPurchase2),
-          { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
+          {
+            parse_mode: "HTML",
+            reply_markup: numberMenuKeyboard() as any,
+            rich_markdown: generatedNumberRichMessage(device2, displayPhone2, creditsAfterPurchase2),
+          }
         );
         return;
       }
@@ -1485,24 +1546,36 @@ function setupHandlers(bot: TelegramBot) {
           totalDevices += devices.length;
         }
         const activeRate = totalDevices > 0 ? Math.round((totalOnline / totalDevices) * 100) : 0;
+        const statusRows: Array<Array<string | number>> = [
+          ["CONNECTED PANELS", panels.length],
+          ["TOTAL DEVICES", totalDevices],
+          ["ONLINE DEVICES", totalOnline],
+          ["OFFLINE DEVICES", totalOffline],
+          ["ACTIVE RATE", `${activeRate}%`],
+        ];
 
         await send(
           chatId,
  `${em(E.check, "")} <b>STATUS REPORT</b>\n` +
           `${divider()}\n\n` +
-          tableBlock(["METRIC", "VALUE"], [
-            ["CONNECTED PANELS", panels.length],
-            ["TOTAL DEVICES", totalDevices],
-            ["ONLINE DEVICES", totalOnline],
-            ["OFFLINE DEVICES", totalOffline],
-            ["ACTIVE RATE", `${activeRate}%`],
-          ]) +
+          tableBlock(["METRIC", "VALUE"], statusRows) +
           `\n\n` +
           `${divider()}\n` +
           `${em(E.refresh, "")} <b>LIVE INVENTORY</b>\n` +
           `Numbers are refreshed directly from all connected Firebase panels.\n` +
           `Use <b>GET NUMBER</b> to receive an active number instantly.`,
-          { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
+          {
+            parse_mode: "HTML",
+            reply_markup: mainMenuKeyboard() as any,
+            rich_markdown:
+              `${em(E.check, "")} <b>STATUS REPORT</b>\n` +
+              `${divider()}\n\n` +
+              richTableBlock(["METRIC", "VALUE"], statusRows) +
+              `\n\n${divider()}\n` +
+              `${em(E.refresh, "")} <b>LIVE INVENTORY</b>\n` +
+              `Numbers are refreshed directly from all connected Firebase panels.\n` +
+              `Use <b>GET NUMBER</b> to receive an active number instantly.`,
+          }
         );
         return;
       }
@@ -1689,22 +1762,30 @@ function setupHandlers(bot: TelegramBot) {
       }
 
       if (text === sct("BUY CREDIT")) {
+        const creditPackageRows: Array<Array<string | number>> = [
+          ["100", "₹49"],
+          ["500", "₹199"],
+          ["1000", "₹349"],
+          ["5000", "₹999"],
+        ];
         await send(
           chatId,
           `${em(E.buy, "")} <b>BUY CREDITS</b>\n` +
           `${divider()}\n\n` +
           `${em(E.credits, "")} <b>SELECT A CREDIT PACKAGE</b>\n` +
           `Package select karne ke baad payment method choose karo: UPI ya USDT.\n\n` +
-          tableBlock(["CREDITS", "PRICE"], [
-            ["100", "₹49"],
-            ["500", "₹199"],
-            ["1000", "₹349"],
-            ["5000", "₹999"],
-          ]) +
+          tableBlock(["CREDITS", "PRICE"], creditPackageRows) +
           `\n\n` +
           `${em(E.history, "")} Payment complete karke screenshot yahi bot mein bhejo for approval.`,
           {
             parse_mode: "HTML",
+            rich_markdown:
+              `${em(E.buy, "")} <b>BUY CREDITS</b>\n` +
+              `${divider()}\n\n` +
+              `${em(E.credits, "")} <b>SELECT A CREDIT PACKAGE</b>\n` +
+              `Package select karne ke baad payment method choose karo: UPI ya USDT.\n\n` +
+              richTableBlock(["CREDITS", "PRICE"], creditPackageRows) +
+              `\n\n${em(E.history, "")} Payment complete karke screenshot yahi bot mein bhejo for approval.`,
             reply_markup: {
               inline_keyboard: [
                 [
