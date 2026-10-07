@@ -929,8 +929,8 @@ function generatedNumberMessage(device: Awaited<ReturnType<typeof getAllActiveDe
 
 function generatedNumberRichMessage(device: Awaited<ReturnType<typeof getAllActiveDevices>>[number], displayPhone: string, creditsAfterPurchase: number): string {
   return (
-    `${divider()}\n` +
-    `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n` +
+    `${divider()}\n\n` +
+    `${em(E.lightning, "")} <b>RANDOM NUMBER GENERATED!</b>\n\n` +
     `${divider()}\n\n` +
     richTableBlock(["DETAIL", "VALUE"], [
       ["DEVICE ID", `N${device.id}`],
