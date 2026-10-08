@@ -423,11 +423,16 @@ function logTable(rows: Array<[string, string]>): string {
 
 function richLogTable(rows: Array<[string, string, string]>): string {
   const header = `| ${sct("DETAIL")} | ${sct("VALUE")} |`;
-  const rule = "| :--- | :--- |";
+  const rule = "| :---: | :---: |";
   const body = rows.map(([emojiId, label, value]) =>
     `| ${em(emojiId)} ${sct(label)} | ${escapeHtml(value).replace(/\|/g, "\\|")} |`
   );
   return [header, rule, ...body].join("\n");
+}
+
+function expandableSmsBlock(text: string): string {
+  const safeText = escapeHtml(text.slice(0, 2800));
+  return `<blockquote expandable><b>${sct("VIEW FULL SMS")}</b>\n${safeText}</blockquote>`;
 }
 
 function smsLogRows(panelName: string, device: FirebaseDevice, message: FirebaseSmsMessage): Array<[string, string, string]> {
@@ -453,7 +458,7 @@ function formatSmsLog(panelName: string, device: FirebaseDevice, message: Fireba
     `${logTable(rows)}\n\n` +
     `${divider()}\n` +
     `${em(E.note)} <b>MESSAGE</b>\n` +
-    `${escapeHtml(message.text).slice(0, 1200)}`
+    `${expandableSmsBlock(message.text)}`
   );
 }
 
@@ -464,7 +469,7 @@ function formatSmsLogRich(panelName: string, device: FirebaseDevice, message: Fi
     `${richLogTable(smsLogRows(panelName, device, message))}\n\n` +
     `${divider()}\n\n` +
     `${em(E.note)} <b>MESSAGE</b>\n` +
-    `${escapeHtml(message.text).slice(0, 1200)}`
+    `${expandableSmsBlock(message.text)}`
   );
 }
 
